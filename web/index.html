@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>号彩智算 · 双色球/大乐透分析预测平台</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <div class="logo"></div>
+    <div>
+      <h1>号彩智算</h1>
+      <p>双色球 / 大乐透 历史数据分析与号码生成平台</p>
+    </div>
+  </div>
+  <div class="disclaimer">⚠️ 彩票开奖为独立随机事件，本平台的“预测”仅为历史统计与号码生成工具，<b>不构成任何购彩建议</b>，请理性购彩</div>
+</header>
+
+<nav class="navbar">
+  <div class="tabs" id="tabs">
+    <button data-game="ssq" class="active">双色球</button>
+    <button data-game="dlt">大乐透</button>
+  </div>
+  <div class="databar">
+    <div class="draw-info" id="draw-info">
+      <span class="chip">最新一期加载中…</span>
+    </div>
+    <button class="btn ghost" id="btn-update">⟳ 更新数据</button>
+  </div>
+</nav>
+
+<nav class="jumpnav">
+  <a href="#sec-stats">📊 统计</a>
+  <a href="#sec-predict">🧮 预测</a>
+  <a href="#sec-tracking">🎯 跟踪</a>
+  <a href="#sec-sim">🧪 模拟</a>
+  <a href="#sec-history">📅 历史</a>
+</nav>
+
+<main>
+  <!-- 统计分析 -->
+  <section class="card">
+    <div class="card-head">
+      <h2>📊 号码统计 <small id="stats-label"></small></h2>
+      <label class="inline">窗口
+        <select id="sel-window">
+          <option value="30">近30期</option>
+          <option value="50">近50期</option>
+          <option value="100" selected>近100期</option>
+          <option value="200">近200期</option>
+          <option value="300">近300期</option>
+        </select>
+      </label>
+    </div>
+    <div id="heat-areas"></div>
+    <div class="charts-grid">
+      <div class="chart-card"><h3>出现频率</h3><canvas id="chart-freq"></canvas></div>
+      <div class="chart-card"><h3>当前遗漏</h3><canvas id="chart-omission"></canvas></div>
+      <div class="chart-card"><h3>和值走势</h3><canvas id="chart-sum"></canvas></div>
+      <div class="chart-card"><h3>奇偶分布</h3><canvas id="chart-parity"></canvas></div>
+      <div class="chart-card wide"><h3>号码共现热力图 <small>同行同期出现越多越深（对角线为出现次数）</small></h3><canvas id="chart-pairs"></canvas></div>
+    </div>
+  </section>
+
+  <!-- 算法与预测 -->
+  <section class="card">
+    <div class="card-head"><h2>🧮 预测算法</h2></div>
+    <p class="hint">选择一种算法，平台将基于统计窗口内的历史数据为每个号码打分，再结合和值/奇偶/区间/连号/重号等历史约束生成号码组合。每次点击会重新抽样（换一批）。</p>
+    <div class="algo-grid" id="algo-cards"></div>
+    <div class="controls">
+      <label class="inline">生成注数
+        <select id="sel-sets">
+          <option>1</option><option>2</option><option>3</option>
+          <option>5</option><option selected>7</option><option>10</option>
+        </select>
+      </label>
+      <div id="algo-params" class="algo-params"></div>
+      <button class="btn primary" id="btn-predict">🎲 生成预测</button>
+      <button class="btn" id="btn-backtest">📈 回测验证（近30期）</button>
+      <button class="btn" id="btn-compare">⚖️ 算法对比</button>
+    </div>
+    <div id="cmp-picker" class="cmp-picker"></div>
+    <div id="predict-result"></div>
+    <div id="compare-result"></div>
+    <div id="backtest-result"></div>
+  </section>
+
+  <!-- 预测跟踪 -->
+  <section class="card" id="sec-tracking">
+    <div class="card-head">
+      <h2>🎯 预测跟踪 <small id="tracking-label"></small></h2>
+      <button class="btn ghost" id="btn-track-refresh">⟳ 刷新</button>
+    </div>
+    <p class="hint">在预测结果里点击「保存并跟踪」，下期开奖后会自动核对命中。长期积累即可看到每种算法的真实战绩——大概率会发现它们都围绕随机基线波动。</p>
+    <div id="tracking-body"><div class="empty-tip">暂无跟踪记录，先去生成一次预测并保存</div></div>
+  </section>
+
+  <!-- 模拟购彩 -->
+  <section class="card" id="sec-sim">
+    <div class="card-head"><h2>🧪 模拟购彩计算器 <small>蒙特卡洛模拟长期购彩的资金曲线</small></h2></div>
+    <p class="hint">假设每期随机买 M 注、坚持 N 期。模拟以「均匀随机开奖」进行（与真实开奖同分布）。理论上长期回报率趋近彩票的返奖率——双色球约 50%，即每花 2 元长期平均收回约 1 元。</p>
+    <div class="controls">
+      <label class="inline">每期注数
+        <select id="sim-bets"><option>1</option><option>2</option><option>5</option><option>10</option><option>20</option><option>50</option></select>
+      </label>
+      <label class="inline">模拟期数
+        <select id="sim-periods"><option>100</option><option selected>500</option><option>1000</option><option>2000</option><option>5000</option></select>
+      </label>
+      <button class="btn primary" id="btn-sim">▶ 开始模拟</button>
+    </div>
+    <div id="sim-result"></div>
+  </section>
+
+  <!-- 历史开奖 -->
+  <section class="card">
+    <div class="card-head"><h2>📅 历史开奖 <small id="history-label"></small></h2></div>
+    <div id="history-grid" class="hist-grid"></div>
+  </section>
+</main>
+
+<footer>数据来源：500.com（datachart.500.com 历史开奖） · 本平台不构成任何购彩建议 · 彩票有风险，购彩需理性</footer>
+
+<div id="toast" class="toast"></div>
+<script src="/app.js"></script>
+</body>
+</html>
