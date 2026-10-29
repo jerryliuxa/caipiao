@@ -1,11 +1,24 @@
-"""500.com 历史开奖数据抓取与解析（datachart.500.com 历史图表页）"""
+"""历史开奖数据抓取与解析。
+
+国内游戏（双色球/大乐透）：datachart.500.com 历史图表页。
+美国游戏（强力球/超级百万）：jbaranski/jeffs-lottery-utils 的自动更新 CSV
+（GitHub raw 直连，每期开奖后数小时内更新，覆盖现行号码矩阵全部历史）；
+网络不可用时回退到仓库内置的 seed 快照。
+"""
+import os
 import re
 import ssl
 import urllib.request
 
 from .games import get_game
 
-_URL = "https://datachart.500.com/{game}/history/newinc/history.php?limit={limit}"
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+_URL_500 = "https://datachart.500.com/{game}/history/newinc/history.php?limit={limit}"
+_URL_USCSV = {
+    "pb": "https://raw.githubusercontent.com/jbaranski/jeffs-lottery-utils/main/numbers/powerball.csv",
+    "mm": "https://raw.githubusercontent.com/jbaranski/jeffs-lottery-utils/main/numbers/megamillions.csv",
+}
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
     "Referer": "https://www.500.com/",
@@ -16,12 +29,16 @@ _SSL.verify_mode = ssl.CERT_NONE
 
 
 def fetch_history(game_key, limit=300):
-    """抓取最近 limit 期开奖，返回旧→新排列的 draw 列表。
-
-    draw 结构: {"issue": "26114", "date": "2026-10-06", "numbers": {"red": [...], "blue": [...]}}
-    """
     game = get_game(game_key)
-    url = _URL.format(game=game_key, limit=limit)
+    if game.date_issue:
+        return _fetch_uscsv(game, limit)
+    return _fetch_500(game, limit)
+
+
+# ---------- 500.com（双色球 / 大乐透） ----------
+
+def _fetch_500(game, limit=300):
+    url = _URL_500.format(game=game.key, limit=limit)
     req = urllib.request.Request(url, headers=_HEADERS)
     with urllib.request.urlopen(req, timeout=25, context=_SSL) as resp:
         raw = resp.read()
@@ -61,6 +78,52 @@ def fetch_history(game_key, limit=300):
         raise ValueError("未解析到任何开奖记录")
     draws.reverse()  # 页面为新→旧，统一为旧→新
     return draws
+
+
+# ---------- 美国 CSV（强力球 / 超级百万） ----------
+
+def _fetch_uscsv(game, limit=300):
+    text = _download_csv(game.key)
+    rows = []
+    for line in text.splitlines()[1:]:  # 跳过表头
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) < 3:
+            continue
+        date_iso = _parse_date(parts[0])
+        if not date_iso:
+            continue
+        main = [int(x) for x in parts[1].split("|") if x.strip().isdigit()]
+        sub = [int(x) for x in parts[2].split("|") if x.strip().isdigit()]
+        numbers = {game.main_pool.key: sorted(main), game.sub_pool.key: sorted(sub)}
+        if not _valid(game, numbers):
+            continue
+        rows.append({"issue": date_iso.replace("-", ""), "date": date_iso, "numbers": numbers})
+
+    if not rows:
+        raise ValueError("未解析到任何开奖记录")
+    return rows[-int(limit):]  # CSV 为旧→新
+
+
+def _download_csv(game_key, timeout=25):
+    try:
+        req = urllib.request.Request(_URL_USCSV[game_key], headers=_HEADERS)
+        with urllib.request.urlopen(req, timeout=timeout, context=_SSL) as resp:
+            return resp.read().decode("utf-8", "ignore")
+    except Exception:
+        seed = os.path.join(_ROOT, "data", "seed", f"{game_key}.csv")
+        with open(seed, "r", encoding="utf-8") as f:
+            return f.read()  # 网络不可用时回退内置快照（可能略旧）
+
+
+def _parse_date(us):
+    """M/D/YYYY → YYYY-MM-DD，无法解析返回空串"""
+    m = re.fullmatch(r"(\d{1,2})/(\d{1,2})/(\d{4})", us.strip())
+    if not m:
+        return ""
+    mo, d, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    if not (1 <= mo <= 12 and 1 <= d <= 31):
+        return ""
+    return f"{y:04d}-{mo:02d}-{d:02d}"
 
 
 def _valid(game, numbers):

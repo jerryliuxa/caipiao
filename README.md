@@ -1,20 +1,24 @@
-# 号彩智算 · 双色球 / 大乐透分析预测平台
+# 号彩智算 · 双色球 / 大乐透 / 美彩分析预测平台
 
-一个本地运行的彩票历史数据分析与号码生成平台。数据自动抓取自 **500.com**（datachart.500.com 历史开奖页），内置 **31 种可选算法**（含统计、概率、机器学习、深度学习、组合优化等六大类）为每个号码打分，结合历史分布约束生成号码组合，附带滚动回测功能检验算法的历史表现。
+一个本地运行的彩票历史数据分析与号码生成平台。支持 **双色球、大乐透、美国强力球（Powerball）、超级百万（Mega Millions）** 四种游戏：国内游戏数据抓取自 **500.com**（datachart.500.com），美国游戏数据来自 GitHub 上自动更新的 **jeffs-lottery-utils** 数据集（覆盖现行号码矩阵全部历史）。内置 **31 种可选算法**（含统计、概率、机器学习、深度学习、组合优化等大类）为每个号码打分，结合历史分布约束生成号码组合，附带滚动回测功能检验算法的历史表现。
 
 > ⚠️ **免责声明**：彩票每期开奖都是独立随机事件，历史统计无法真正预测未来。本平台所有"预测"仅是基于历史数据的统计工具与娱乐参考，**不构成任何购彩建议**。请理性购彩。
 
 ## 功能一览
 
-- **双色游戏支持**：双色球（红球 33 选 6 + 蓝球 16 选 1）、大乐透（前区 35 选 5 + 后区 12 选 2）
-- **数据管理**：一键从 500.com 拉取最新开奖（首次启动自动抓取近 300 期），本地 SQLite 存储、增量去重
+- **四种游戏**：
+  - 双色球（红球 33 选 6 + 蓝球 16 选 1，每周二四日开奖）
+  - 大乐透（前区 35 选 5 + 后区 12 选 2，每周一三六开奖）
+  - 美国强力球（白球 69 选 5 + 强力球 26 选 1，$2/注，每周一三六开奖）
+  - 超级百万（白球 70 选 5 + Mega Ball 24 选 1，$5/注，每周二五开奖）
+- **数据管理**：一键拉取最新开奖（首次启动自动抓取近 300 期），本地 SQLite 存储、增量去重；美国数据网络不可用时自动回退内置快照
 - **统计分析**：号码热度图（频率 + 遗漏 tooltip）、出现频率 / 当前遗漏柱状图、和值走势（含 P10~P90 区间带）、奇偶分布、**号码共现热力图**
 - **31 种预测算法**：按六大分类分组展示，部分算法带可调参数
 - **号码生成**：按评分加权抽样，自动套用历史分布约束（和值、奇偶、大小、质合、三分区、012路、AC 值、跨度、尾数、连号、重号），抽样失败时逐级放宽
 - **滚动回测**：对最近 30 期逐期"只用之前的数据"预测一注，统计命中情况并与随机基线对比（带缓存，重复回测即时返回）
 - **预测跟踪闭环**：预测结果一键「保存并跟踪」，下期开奖更新数据后**自动结算命中**，长期积累形成每种算法的真实战绩榜（算法战绩表 + 最近记录表）
 - **算法对比面板**：勾选 2~6 个算法并排出票，横向对比综合热度、快速回测均命中与跟踪均命中
-- **模拟购彩计算器**：蒙特卡洛模拟"每期 M 注 × N 期"的资金曲线（投入 vs 收回双线图），直观展示彩票的负期望（回报率长期趋近 ~50%）
+- **模拟购彩计算器**：蒙特卡洛模拟"每期 M 注 × N 期"的资金曲线（投入 vs 收回双线图），奖级表按所选游戏真实奖级设置（美国游戏以美元计价），直观展示彩票的负期望（回报率长期趋近 ~50%）
 - **导出 CSV**：预测结果一键导出（UTF-8 BOM，Excel 直接打开）
 - **锚点导航**：统计 / 预测 / 跟踪 / 模拟 / 历史快速跳转
 
@@ -84,7 +88,7 @@ pip install numpy scikit-learn
 ├── 启动平台.bat             # Windows 一键启动
 ├── core/
 │   ├── games.py            # 游戏定义（号码池 / 开奖日）
-│   ├── datasource.py       # 500.com 抓取与解析
+│   ├── datasource.py       # 数据抓取：500.com（国内）/ jeffs-lottery-utils CSV（美国，含 seed 回退）
 │   ├── storage.py          # SQLite 存储（data/lottery.db）
 │   ├── stats.py            # 频率 / 遗漏 / 和值等统计
 │   ├── filters.py          # 组合过滤器（11 类约束 + 分级放宽）
@@ -109,7 +113,7 @@ pip install numpy scikit-learn
 | `/api/games` | 游戏与号码池定义 |
 | `/api/algorithms` | 算法列表（含分类/参数/依赖标记）+ 依赖可用性 |
 | `/api/history?game=ssq&limit=30` | 历史开奖（新→旧） |
-| `/api/update?game=ssq&limit=150` | 从 500.com 增量更新（game=all 更新全部） |
+| `/api/update?game=ssq&limit=150` | 增量更新开奖数据（按游戏自动选数据源，game=all 更新全部） |
 | `/api/stats?game=ssq&window=100` | 统计数据（频率/遗漏/和值/奇偶/下期信息） |
 | `/api/predict?game=ssq&algo=ensemble&window=100&sets=5&nonce=1&params={}` | 生成预测 |
 | `/api/backtest?game=ssq&algo=hot&window=100&count=30&params={}` | 滚动回测 |
@@ -117,9 +121,12 @@ pip install numpy scikit-learn
 | `/api/tracking?game=ssq&limit=60` | 跟踪记录 + 算法战绩（调用时自动结算已开奖预测） |
 | `/api/compare?game=ssq&algos=a,b,c&window=100&backtest=8` | 多算法并排对比 |
 
-`game`：`ssq` / `dlt`；`algo`：见算法清单的 key（`ensemble` / `stacking` / `hot` / `cold` / `omission` / `markov` / `period` / `monte` / `survival` / `hmm` / `kalman` / `changepoint` / `kde` / `mcmc` / `ngram` / `thompson` / `genetic` / `cooccurrence` / `antiheat` / `cover` / `logistic` / `gbdt` / `rf` / `mlp` / `timeseries` / `rnn` / `attention` / `cnn` / `gnn` / `gan` / `vae`）。
+`game`：`ssq` / `dlt` / `pb`（美国强力球）/ `mm`（超级百万）；`algo`：见算法清单的 key（`ensemble` / `stacking` / `hot` / `cold` / `omission` / `markov` / `period` / `monte` / `survival` / `hmm` / `kalman` / `changepoint` / `kde` / `mcmc` / `ngram` / `thompson` / `genetic` / `cooccurrence` / `antiheat` / `cover` / `logistic` / `gbdt` / `rf` / `mlp` / `timeseries` / `rnn` / `attention` / `cnn` / `gnn` / `gan` / `vae`）。
+
+美国游戏无官方期号，以开奖日期 `YYYYMMDD` 作为期号，跟踪目标即下一开奖日。
 
 ## 数据来源
 
-- 历史开奖：`https://datachart.500.com/{ssq|dlt}/history/newinc/history.php?limit=N`
-- UTF-8 解码（兼容 GBK 回退），本地增量入库
+- 双色球 / 大乐透：`https://datachart.500.com/{ssq|dlt}/history/newinc/history.php?limit=N`，UTF-8 解码（兼容 GBK 回退），本地增量入库
+- 美国强力球 / 超级百万：[jbaranski/jeffs-lottery-utils](https://github.com/jbaranski/jeffs-lottery-utils) 自动更新 CSV（GitHub raw 直连，每期开奖后数小时内更新；强力球覆盖 2015-10 现行 5/69+1/26 矩阵起 1400+ 期，超级百万覆盖 2017-10 现行 5/70+1/24 矩阵起 900+ 期）。网络不可用时自动回退 `data/seed/` 内置快照
+- 备选源说明：usamega.com 有 Cloudflare 防护，仅浏览器可访问、程序化抓取不可用，可作人工参考站

@@ -84,7 +84,7 @@ async function loadStats() {
     state.stats = stats;
     if (stats.empty) {
       $("#draw-info").innerHTML = `<span class="chip">暂无数据，请点击「更新数据」</span>`;
-      $("#heat-areas").innerHTML = `<div class="empty-tip">暂无开奖数据，点击右上角「更新数据」从 500.com 拉取</div>`;
+      $("#heat-areas").innerHTML = `<div class="empty-tip">暂无开奖数据，点击右上角「更新数据」从数据源拉取</div>`;
       return;
     }
     renderDrawBar(game, stats);
@@ -675,18 +675,28 @@ async function loadTracking() {
 
 /* ---------------- 模拟购彩计算器 ---------------- */
 const PRIZE = {
-  ssq: { price: 2, tiers: [
+  ssq: { price: 2, currency: "¥", tiers: [
     { m: 6, s: 1, p: 7000000, name: "一等" }, { m: 6, s: 0, p: 200000, name: "二等" },
     { m: 5, s: 1, p: 3000 }, { m: 5, s: 0, p: 200 }, { m: 4, s: 1, p: 200 },
     { m: 4, s: 0, p: 10 }, { m: 3, s: 1, p: 10 },
     { m: 2, s: 1, p: 5 }, { m: 1, s: 1, p: 5 }, { m: 0, s: 1, p: 5 },
   ] },
-  dlt: { price: 2, tiers: [
+  dlt: { price: 2, currency: "¥", tiers: [
     { m: 5, s: 2, p: 10000000, name: "一等" }, { m: 5, s: 1, p: 500000, name: "二等" },
     { m: 5, s: 0, p: 10000 }, { m: 4, s: 2, p: 3000 }, { m: 4, s: 1, p: 300 },
     { m: 3, s: 2, p: 200 }, { m: 4, s: 0, p: 100 },
     { m: 3, s: 1, p: 15 }, { m: 2, s: 2, p: 15 },
     { m: 3, s: 0, p: 5 }, { m: 1, s: 2, p: 5 }, { m: 2, s: 1, p: 5 }, { m: 0, s: 2, p: 5 },
+  ] },
+  pb: { price: 2, currency: "$", tiers: [
+    { m: 5, s: 1, p: 20000000, name: "头奖(最低)" }, { m: 5, s: 0, p: 1000000 },
+    { m: 4, s: 1, p: 50000 }, { m: 4, s: 0, p: 100 }, { m: 3, s: 1, p: 100 },
+    { m: 3, s: 0, p: 7 }, { m: 2, s: 1, p: 7 }, { m: 1, s: 1, p: 4 }, { m: 0, s: 1, p: 4 },
+  ] },
+  mm: { price: 5, currency: "$", tiers: [
+    { m: 5, s: 1, p: 50000000, name: "头奖(最低)" }, { m: 5, s: 0, p: 10000000 },
+    { m: 4, s: 1, p: 100000 }, { m: 4, s: 0, p: 1000 }, { m: 3, s: 1, p: 1000 },
+    { m: 3, s: 0, p: 50 }, { m: 2, s: 1, p: 50 }, { m: 1, s: 1, p: 25 }, { m: 0, s: 1, p: 10 },
   ] },
 };
 
@@ -710,9 +720,11 @@ function runSimulation() {
   const game = state.game;
   const cfg = state.games[game];
   const pools = cfg.pools;
+  if (!PRIZE[game]) { toast("该游戏暂无奖级表"); return; }
   const M = parseInt($("#sim-bets").value, 10);
   const N = parseInt($("#sim-periods").value, 10);
   const price = PRIZE[game].price;
+  const cur = PRIZE[game].currency || "¥";
   const mainArr = Array.from({ length: pools[0].max_number }, (_, i) => i + 1);
   const subArr = Array.from({ length: pools[1].max_number }, (_, i) => i + 1);
   const K = pools[0].count, SK = pools[1].count;
@@ -742,17 +754,17 @@ function runSimulation() {
   $("#sim-result").innerHTML = `
     <div class="bt-summary">
       <div class="bt-item"><div class="k">模拟规模</div><div class="v">${N} 期 × ${M} 注</div></div>
-      <div class="bt-item"><div class="k">总投入</div><div class="v">¥${cost.toLocaleString()}</div></div>
-      <div class="bt-item"><div class="k">总收回</div><div class="v">¥${win.toLocaleString()}</div></div>
+      <div class="bt-item"><div class="k">总投入</div><div class="v">${cur}${cost.toLocaleString()}</div></div>
+      <div class="bt-item"><div class="k">总收回</div><div class="v">${cur}${win.toLocaleString()}</div></div>
       <div class="bt-item"><div class="k">回报率</div><div class="v ${ret >= 100 ? "good" : "bad"}">${ret.toFixed(1)}%<small>（长期理论约 50%）</small></div></div>
-      <div class="bt-item"><div class="k">中奖次数 / 一等奖</div><div class="v">${hitAny} / ${jackpot}</div></div>
-      <div class="bt-item"><div class="k">单次最大中奖</div><div class="v">¥${best.toLocaleString()}</div></div>
+      <div class="bt-item"><div class="k">中奖次数 / 头奖</div><div class="v">${hitAny} / ${jackpot}</div></div>
+      <div class="bt-item"><div class="k">单次最大中奖</div><div class="v">${cur}${best.toLocaleString()}</div></div>
     </div>
     <div class="chart-card" style="margin-top:12px"><h3>累计投入 vs 累计收回</h3><canvas id="chart-sim" style="height:220px"></canvas></div>`;
-  drawSimChart($("#chart-sim"), costSeries, winSeries);
+  drawSimChart($("#chart-sim"), costSeries, winSeries, cur);
 }
 
-function drawSimChart(cv, cost, win) {
+function drawSimChart(cv, cost, win, cur = "¥") {
   const { ctx, w, h } = setupCanvas(cv);
   ctx.clearRect(0, 0, w, h);
   const padL = 56, padB = 18, padT = 10;
@@ -766,7 +778,7 @@ function drawSimChart(cv, cost, win) {
   for (let g = 0; g <= 3; g++) {
     const vv = (hi * g) / 3;
     ctx.beginPath(); ctx.moveTo(padL, y(vv)); ctx.lineTo(w - 6, y(vv)); ctx.stroke();
-    ctx.fillText("¥" + Math.round(vv / 1000) + "k", 4, y(vv) + 3);
+    ctx.fillText(cur + Math.round(vv / 1000) + "k", 4, y(vv) + 3);
   }
   const line = (arr, color) => {
     ctx.strokeStyle = color; ctx.lineWidth = 1.8;

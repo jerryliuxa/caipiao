@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>号彩智算 · 双色球/大乐透分析预测平台</title>
+<title>号彩智算 · 双色球/大乐透/美彩分析预测平台</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -12,7 +12,7 @@
     <div class="logo"></div>
     <div>
       <h1>号彩智算</h1>
-      <p>双色球 / 大乐透 历史数据分析与号码生成平台</p>
+      <p>双色球 / 大乐透 / 美国强力球 / 超级百万 数据分析与号码生成平台</p>
     </div>
   </div>
   <div class="disclaimer">⚠️ 彩票开奖为独立随机事件，本平台的“预测”仅为历史统计与号码生成工具，<b>不构成任何购彩建议</b>，请理性购彩</div>
@@ -22,6 +22,8 @@
   <div class="tabs" id="tabs">
     <button data-game="ssq" class="active">双色球</button>
     <button data-game="dlt">大乐透</button>
+    <button data-game="pb">美国强力球</button>
+    <button data-game="mm">超级百万</button>
   </div>
   <div class="databar">
     <div class="draw-info" id="draw-info">
@@ -100,7 +102,7 @@
   <!-- 模拟购彩 -->
   <section class="card" id="sec-sim">
     <div class="card-head"><h2>🧪 模拟购彩计算器 <small>蒙特卡洛模拟长期购彩的资金曲线</small></h2></div>
-    <p class="hint">假设每期随机买 M 注、坚持 N 期。模拟以「均匀随机开奖」进行（与真实开奖同分布）。理论上长期回报率趋近彩票的返奖率——双色球约 50%，即每花 2 元长期平均收回约 1 元。</p>
+    <p class="hint">假设每期随机买 M 注、坚持 N 期。模拟以「均匀随机开奖」进行（与真实开奖同分布），奖级表按所选游戏的真实奖级设置。理论上长期回报率趋近彩票的返奖率——中国双色球约 50%，美国强力球/超级百万约 50%，长期购彩平均收回不足投入的一半。</p>
     <div class="controls">
       <label class="inline">每期注数
         <select id="sim-bets"><option>1</option><option>2</option><option>5</option><option>10</option><option>20</option><option>50</option></select>
@@ -120,7 +122,7 @@
   </section>
 </main>
 
-<footer>数据来源：500.com（datachart.500.com 历史开奖） · 本平台不构成任何购彩建议 · 彩票有风险，购彩需理性</footer>
+<footer>数据来源：500.com（双色球/大乐透） · GitHub jeffs-lottery-utils（美国强力球/超级百万，自动更新） · 本平台不构成任何购彩建议 · 彩票有风险，购彩需理性</footer>
 
 <div id="toast" class="toast"></div>
 <script src="/app.js"></script>

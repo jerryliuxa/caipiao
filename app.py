@@ -203,10 +203,14 @@ class Handler(BaseHTTPRequestHandler):
             for i in combo:
                 for j in combo:
                     pairs[i - 1][j - 1] += 1
+        if game.date_issue:  # 美国游戏无官方期号，以下一开奖日期为跟踪目标
+            next_issue = st.next_draw_date(latest["date"], game.draw_weekdays).replace("-", "")
+        else:
+            next_issue = str(int(latest["issue"]) + 1).zfill(len(latest["issue"]))
         return {
             "game": game_key, "total": len(draws_all), "window": len(draws),
             "latest": latest,
-            "next_issue": str(int(latest["issue"]) + 1).zfill(len(latest["issue"])),
+            "next_issue": next_issue,
             "next_date": st.next_draw_date(latest["date"], game.draw_weekdays),
             "pools": pools,
             "sums": {"series": sums, "avg": round(sum(sums) / len(sums), 1),

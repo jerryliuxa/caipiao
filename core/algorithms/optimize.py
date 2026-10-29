@@ -159,6 +159,12 @@ class CoverAlgorithm(Algorithm):
         K = main.count
         P = min(int(params.get("pool_size", 9)), main.max_number)
         G = min(int(params.get("guarantee", 5)), K, P)
+        note_prefix = ""
+        if G >= K:
+            # G=K 意味着必须覆盖池内全部 C(P,K) 种组合（5+1 美国玩法下多达上百注），
+            # 自动降为保证 G-1 以保持出票规模可用
+            G = K - 1
+            note_prefix = f"（保证命中数不能等于选号个数 {K}，已自动降为 {G}）"
         pool_nums = ranked(scores)[:P]
         # 位掩码：universe = 开奖号全落池内的所有可能（C(P,K) 个 K 子集）
         universe = [sum(1 << i for i in comb) for comb in combinations(range(P), K)]
@@ -176,7 +182,7 @@ class CoverAlgorithm(Algorithm):
         main_sets = [[pool_nums[i] for i in range(P) if (t >> i) & 1] for t in tickets]
         full_count = len(main_sets)
         # 永不截断：截断会破坏数学保证；注数可多于请求数
-        self.generation_note = (f"覆盖设计（池 {P} 选 {K}、保证 {G} 中）最优近似解 {full_count} 注，全部保留以维持数学保证"
+        self.generation_note = (f"覆盖设计{note_prefix}（池 {P} 选 {K}、保证 {G} 中）最优近似解 {full_count} 注，全部保留以维持数学保证"
                                 + ("（多于请求数）" if full_count > n_sets else "") + "。")
         if full_count < n_sets:
             seen = {tuple(s) for s in main_sets}
