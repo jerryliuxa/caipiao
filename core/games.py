@@ -1,4 +1,4 @@
-"""游戏定义：双色球 / 大乐透 / 美国强力球 / 超级百万"""
+"""游戏定义：双色球 / 大乐透 / 美国强力球 / 超级百万 / 欧洲三种乐透 / 维京乐透"""
 from dataclasses import dataclass
 
 
@@ -45,6 +45,18 @@ GAMES = {
     "mm": Game("mm", "超级百万",
                (Pool("white", "白球", 70, 5, "red"), Pool("megaball", "Mega Ball", 24, 1, "blue")),
                (1, 4), date_issue=True),
+    "em": Game("em", "欧洲百万",
+               (Pool("main", "主号", 50, 5, "red"), Pool("star", "幸运星", 12, 2, "blue")),
+               (1, 4), date_issue=True),
+    "ej": Game("ej", "欧洲大奖",
+               (Pool("main", "主号", 50, 5, "red"), Pool("euro", "Euro号", 12, 2, "blue")),
+               (1, 4), date_issue=True),
+    "ed": Game("ed", "欧洲梦想",
+               (Pool("main", "主号", 40, 6, "red"), Pool("dream", "梦想号", 5, 1, "blue")),
+               (0, 3), date_issue=True),
+    "vl": Game("vl", "维京乐透",
+               (Pool("main", "主号", 48, 6, "red"), Pool("viking", "维京号", 8, 1, "blue")),
+               (2,), date_issue=True),
 }
 
 

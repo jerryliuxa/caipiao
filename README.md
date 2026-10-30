@@ -1,16 +1,20 @@
-# 号彩智算 · 双色球 / 大乐透 / 美彩分析预测平台
+# 号彩智算 · 8 种彩票数据分析预测平台
 
-一个本地运行的彩票历史数据分析与号码生成平台。支持 **双色球、大乐透、美国强力球（Powerball）、超级百万（Mega Millions）** 四种游戏：国内游戏数据抓取自 **500.com**（datachart.500.com），美国游戏数据来自 GitHub 上自动更新的 **jeffs-lottery-utils** 数据集（覆盖现行号码矩阵全部历史）。内置 **31 种可选算法**（含统计、概率、机器学习、深度学习、组合优化等大类）为每个号码打分，结合历史分布约束生成号码组合，附带滚动回测功能检验算法的历史表现。
+一个本地运行的彩票历史数据分析与号码生成平台，支持 **双色球、大乐透、美国强力球（Powerball）、超级百万（Mega Millions）、欧洲百万（EuroMillions）、欧洲大奖（Eurojackpot）、欧洲梦想（EuroDreams）、维京乐透（Viking Lotto）** 八种游戏。国内游戏数据抓取自 **500.com**，美国与欧洲游戏使用 GitHub 上自动更新的数据集与官方 API。内置 **31 种可选算法**（含统计、概率、机器学习、深度学习、组合优化等大类）为每个号码打分，结合历史分布约束生成号码组合，附带滚动回测功能检验算法的历史表现。
 
 > ⚠️ **免责声明**：彩票每期开奖都是独立随机事件，历史统计无法真正预测未来。本平台所有"预测"仅是基于历史数据的统计工具与娱乐参考，**不构成任何购彩建议**。请理性购彩。
 
 ## 功能一览
 
-- **四种游戏**：
+- **八种游戏**：
   - 双色球（红球 33 选 6 + 蓝球 16 选 1，每周二四日开奖）
   - 大乐透（前区 35 选 5 + 后区 12 选 2，每周一三六开奖）
   - 美国强力球（白球 69 选 5 + 强力球 26 选 1，$2/注，每周一三六开奖）
   - 超级百万（白球 70 选 5 + Mega Ball 24 选 1，$5/注，每周二五开奖）
+  - 欧洲百万（主号 50 选 5 + 幸运星 12 选 2，€2.50/注，每周二五开奖）
+  - 欧洲大奖（主号 50 选 5 + Euro 号 12 选 2，€2/注，每周二五开奖）
+  - 欧洲梦想（主号 40 选 6 + 梦想号 5 选 1，€2.50/注，每周一四开奖；头奖为年金：每月 €20,000 连领 30 年）
+  - 维京乐透（主号 48 选 6 + 维京号 8 选 1，每周三开奖，北欧波罗的海八国联营）
 - **数据管理**：一键拉取最新开奖（首次启动自动抓取近 300 期），本地 SQLite 存储、增量去重；美国数据网络不可用时自动回退内置快照
 - **统计分析**：号码热度图（频率 + 遗漏 tooltip）、出现频率 / 当前遗漏柱状图、和值走势（含 P10~P90 区间带）、奇偶分布、**号码共现热力图**
 - **31 种预测算法**：按六大分类分组展示，部分算法带可调参数
@@ -18,7 +22,7 @@
 - **滚动回测**：对最近 30 期逐期"只用之前的数据"预测一注，统计命中情况并与随机基线对比（带缓存，重复回测即时返回）
 - **预测跟踪闭环**：预测结果一键「保存并跟踪」，下期开奖更新数据后**自动结算命中**，长期积累形成每种算法的真实战绩榜（算法战绩表 + 最近记录表）
 - **算法对比面板**：勾选 2~6 个算法并排出票，横向对比综合热度、快速回测均命中与跟踪均命中
-- **模拟购彩计算器**：蒙特卡洛模拟"每期 M 注 × N 期"的资金曲线（投入 vs 收回双线图），奖级表按所选游戏真实奖级设置（美国游戏以美元计价），直观展示彩票的负期望（回报率长期趋近 ~50%）
+- **模拟购彩计算器**：蒙特卡洛模拟"每期 M 注 × N 期"的资金曲线（投入 vs 收回双线图），奖级表按所选游戏真实奖级设置（美元/欧元计价），直观展示彩票的负期望（回报率长期趋近 ~50%）
 - **导出 CSV**：预测结果一键导出（UTF-8 BOM，Excel 直接打开）
 - **锚点导航**：统计 / 预测 / 跟踪 / 模拟 / 历史快速跳转
 
@@ -121,12 +125,16 @@ pip install numpy scikit-learn
 | `/api/tracking?game=ssq&limit=60` | 跟踪记录 + 算法战绩（调用时自动结算已开奖预测） |
 | `/api/compare?game=ssq&algos=a,b,c&window=100&backtest=8` | 多算法并排对比 |
 
-`game`：`ssq` / `dlt` / `pb`（美国强力球）/ `mm`（超级百万）；`algo`：见算法清单的 key（`ensemble` / `stacking` / `hot` / `cold` / `omission` / `markov` / `period` / `monte` / `survival` / `hmm` / `kalman` / `changepoint` / `kde` / `mcmc` / `ngram` / `thompson` / `genetic` / `cooccurrence` / `antiheat` / `cover` / `logistic` / `gbdt` / `rf` / `mlp` / `timeseries` / `rnn` / `attention` / `cnn` / `gnn` / `gan` / `vae`）。
+`game`：`ssq` / `dlt` / `pb`（美国强力球）/ `mm`（超级百万）/ `em`（欧洲百万）/ `ej`（欧洲大奖）/ `ed`（欧洲梦想）/ `vl`（维京乐透）；`algo`：见算法清单的 key（`ensemble` / `stacking` / `hot` / `cold` / `omission` / `markov` / `period` / `monte` / `survival` / `hmm` / `kalman` / `changepoint` / `kde` / `mcmc` / `ngram` / `thompson` / `genetic` / `cooccurrence` / `antiheat` / `cover` / `logistic` / `gbdt` / `rf` / `mlp` / `timeseries` / `rnn` / `attention` / `cnn` / `gnn` / `gan` / `vae`）。
 
-美国游戏无官方期号，以开奖日期 `YYYYMMDD` 作为期号，跟踪目标即下一开奖日。
+美国与欧洲游戏无统一官方期号，以开奖日期 `YYYYMMDD` 作为期号，跟踪目标即下一开奖日。
 
 ## 数据来源
 
 - 双色球 / 大乐透：`https://datachart.500.com/{ssq|dlt}/history/newinc/history.php?limit=N`，UTF-8 解码（兼容 GBK 回退），本地增量入库
-- 美国强力球 / 超级百万：[jbaranski/jeffs-lottery-utils](https://github.com/jbaranski/jeffs-lottery-utils) 自动更新 CSV（GitHub raw 直连，每期开奖后数小时内更新；强力球覆盖 2015-10 现行 5/69+1/26 矩阵起 1400+ 期，超级百万覆盖 2017-10 现行 5/70+1/24 矩阵起 900+ 期）。网络不可用时自动回退 `data/seed/` 内置快照
-- 备选源说明：usamega.com 有 Cloudflare 防护，仅浏览器可访问、程序化抓取不可用，可作人工参考站
+- 美国强力球 / 超级百万：[jbaranski/jeffs-lottery-utils](https://github.com/jbaranski/jeffs-lottery-utils) 自动更新 CSV（每期开奖后数小时内更新；强力球覆盖 2015-10 现行 5/69+1/26 矩阵起 1400+ 期，超级百万覆盖 2017-10 现行 5/70+1/24 矩阵起 900+ 期）
+- 欧洲百万 / 欧洲大奖：[dev-baris/lottery-archive](https://github.com/dev-baris/lottery-archive) 自动更新 CSV（GitHub Actions 每期开奖后更新；只保留现行号码矩阵——欧洲百万 2016-09-27 幸运星 1-12 起 860+ 期，欧洲大奖 2022-03-25 Euro号 1-12 起 380+ 期）
+- 欧洲梦想：euro-millions.com 年度归档页（2023 年开售全部历史 310+ 期）
+- 维京乐透：Norsk Tipping 官方 API（`api.norsk-tipping.no/LotteryGameInfo/v2`，单次查询窗口 ≤15 周自动分块回溯，最多两年）
+- 所有网络数据源抓取失败时自动回退 `data/seed/` 内置快照
+- 备选源说明：usamega.com / eurojackpot.org 等站点有 Cloudflare 防护，仅浏览器可访问、程序化抓取不可用，可作人工参考站

@@ -698,6 +698,29 @@ const PRIZE = {
     { m: 4, s: 1, p: 100000 }, { m: 4, s: 0, p: 1000 }, { m: 3, s: 1, p: 1000 },
     { m: 3, s: 0, p: 50 }, { m: 2, s: 1, p: 50 }, { m: 1, s: 1, p: 25 }, { m: 0, s: 1, p: 10 },
   ] },
+  em: { price: 2.5, currency: "€", tiers: [
+    { m: 5, s: 2, p: 17000000, name: "头奖(最低)" }, { m: 5, s: 1, p: 400000 },
+    { m: 5, s: 0, p: 45000 }, { m: 4, s: 2, p: 2000 }, { m: 4, s: 1, p: 140 },
+    { m: 3, s: 2, p: 73 }, { m: 4, s: 0, p: 46 }, { m: 2, s: 2, p: 16 },
+    { m: 3, s: 1, p: 12 }, { m: 3, s: 0, p: 10 }, { m: 1, s: 2, p: 8 },
+    { m: 2, s: 1, p: 6 }, { m: 2, s: 0, p: 4 },
+  ] },
+  ej: { price: 2, currency: "€", tiers: [
+    { m: 5, s: 2, p: 10000000, name: "头奖(最低)" }, { m: 5, s: 1, p: 800000 },
+    { m: 5, s: 0, p: 100000 }, { m: 4, s: 2, p: 3000 }, { m: 4, s: 1, p: 200 },
+    { m: 4, s: 0, p: 100 }, { m: 3, s: 2, p: 70 }, { m: 3, s: 1, p: 25 },
+    { m: 3, s: 0, p: 17 }, { m: 2, s: 2, p: 18 }, { m: 2, s: 1, p: 9 }, { m: 1, s: 2, p: 10 },
+  ] },
+  ed: { price: 2.5, currency: "€", tiers: [
+    { m: 6, s: 1, p: 7200000, name: "头奖(年金总额)" }, { m: 6, s: 0, p: 120000, name: "二等奖(年金总额)" },
+    { m: 5, s: 1, p: 503 }, { m: 5, s: 0, p: 503 }, { m: 4, s: 1, p: 34 }, { m: 4, s: 0, p: 34 },
+    { m: 3, s: 1, p: 5 }, { m: 3, s: 0, p: 5 }, { m: 2, s: 1, p: 3 }, { m: 2, s: 0, p: 3 },
+  ] },
+  vl: { price: 1.5, currency: "€", tiers: [
+    { m: 6, s: 1, p: 5000000, name: "头奖" }, { m: 6, s: 0, p: 50000 },
+    { m: 5, s: 1, p: 3000 }, { m: 5, s: 0, p: 800 }, { m: 4, s: 1, p: 100 },
+    { m: 4, s: 0, p: 30 }, { m: 3, s: 1, p: 20 }, { m: 3, s: 0, p: 8 }, { m: 2, s: 1, p: 5 },
+  ] },
 };
 
 function _sample(arr, k) {
@@ -754,8 +777,8 @@ function runSimulation() {
   $("#sim-result").innerHTML = `
     <div class="bt-summary">
       <div class="bt-item"><div class="k">模拟规模</div><div class="v">${N} 期 × ${M} 注</div></div>
-      <div class="bt-item"><div class="k">总投入</div><div class="v">${cur}${cost.toLocaleString()}</div></div>
-      <div class="bt-item"><div class="k">总收回</div><div class="v">${cur}${win.toLocaleString()}</div></div>
+      <div class="bt-item"><div class="k">总投入</div><div class="v">${cur}${Math.round(cost).toLocaleString()}</div></div>
+      <div class="bt-item"><div class="k">总收回</div><div class="v">${cur}${Math.round(win).toLocaleString()}</div></div>
       <div class="bt-item"><div class="k">回报率</div><div class="v ${ret >= 100 ? "good" : "bad"}">${ret.toFixed(1)}%<small>（长期理论约 50%）</small></div></div>
       <div class="bt-item"><div class="k">中奖次数 / 头奖</div><div class="v">${hitAny} / ${jackpot}</div></div>
       <div class="bt-item"><div class="k">单次最大中奖</div><div class="v">${cur}${best.toLocaleString()}</div></div>
