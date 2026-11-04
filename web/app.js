@@ -540,7 +540,10 @@ function renderBacktest(r) {
 /* ---------------- 回测择优荐号 ---------------- */
 async function recommend() {
   const btn = $("#btn-recommend");
-  btn.disabled = true; btn.textContent = "分析中…";
+  const algoDef = state.algos.find((a) => a.key === state.algo);
+  const slow = algoDef && algoDef.heavy;
+  btn.disabled = true;
+  btn.textContent = slow ? "分析中…（深度模型需训练，约 10~60 秒，勿重复点击）" : "分析中…";
   try {
     const window = $("#sel-window").value;
     const sets = $("#sel-sets").value;
