@@ -558,7 +558,7 @@ function renderRecommend(r) {
     .join("") || `<tr><td colspan="3" class="dim-t">无明显盲区</td></tr>`;
 
   $("#recommend-result").innerHTML = `
-    <div class="summary"><div class="head">🎯 ${r.algo_name} · 回测择优荐号（基于近 ${r.backtest_count} 期回测分析，窗口 ${r.window} 期）</div>${r.summary}</div>
+    <div class="summary"><div class="head">🎯 ${r.algo_name} · 回测择优荐号（基于近 ${r.backtest_count} 期回测分析，窗口 ${r.window} 期）· 批次 ${new Date().toLocaleTimeString("zh-CN", { hour12: false })}</div>${r.summary}</div>
     <div class="tickets">${tickets}</div>
     <div class="pred-actions">
       <button class="btn sm" id="btn-rec-track" ${state.stats && !state.stats.empty ? "" : "disabled"}>💾 保存并跟踪全部 ${r.n_sets} 注（下期开奖自动核对）</button>
