@@ -167,6 +167,13 @@ class Handler(BaseHTTPRequestHandler):
                 window=int(q.get("window", 100)), count=int(q.get("count", 30)),
                 algo_params=params))
 
+        elif route == "/api/recommend":
+            params = json.loads(q.get("params", "{}"))
+            self._json(service.recommend_after_backtest(
+                q.get("game", "ssq"), q.get("algo", "ensemble"),
+                window=int(q.get("window", 100)), count=min(int(q.get("count", 30)), 60),
+                nonce=q.get("nonce", "0"), algo_params=params))
+
         else:
             self._json({"error": f"未知接口 {route}"}, 404)
 

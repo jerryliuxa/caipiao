@@ -206,6 +206,100 @@ def backtest(game_key, algo_key, window=100, count=30, algo_params=None):
             "summary": summary, "rows": rows}
 
 
+# ---------- 回测择优荐号 ----------
+
+def recommend_after_backtest(game_key, algo_key, window=100, count=30, nonce=0, algo_params=None):
+    """回测择优荐号：以滚动回测的逐号命中/盲区统计修正算法评分，融合后按标准约束管线出一注。
+
+    融合规则：当前算法评分 + 0.4×「预测且命中」信任加成 + 0.3×「常开出但漏掉」盲区补强。
+    """
+    game = get_game(game_key)
+    algo = get_algorithm(algo_key)
+    algo_params = algo_params or {}
+    draws_all = storage.get_draws(game_key)
+    if len(draws_all) < 20:
+        raise ValueError("历史数据不足（少于 20 期），请先点击“更新数据”")
+    draws = draws_all[-int(window):]
+    bt = backtest(game_key, algo_key, window, count, algo_params)
+    rows = bt["rows"]
+    rng = _make_rng(game_key, algo_key, window, nonce, f"{draws[-1]['issue']}|rec{len(rows)}")
+    algo.generation_note = ""
+    raw_scores = algo.predict(draws, game, algo_params)
+
+    W_TRUST, W_BLIND = 0.4, 0.3
+    freq = {p.key: stats.frequency(draws, p) for p in game.pools}
+    omiss = {p.key: stats.omission(draws, p) for p in game.pools}
+
+    stat = {}
+    for pool in game.pools:
+        pred_cnt = [0] * pool.max_number
+        hit_cnt = [0] * pool.max_number
+        appear_cnt = [0] * pool.max_number
+        for r in rows:
+            pred = set(r["predicted"][pool.key])
+            actual = set(r["actual"][pool.key])
+            for n in pred:
+                pred_cnt[n - 1] += 1
+                if n in actual:
+                    hit_cnt[n - 1] += 1
+            for n in actual:
+                appear_cnt[n - 1] += 1
+        stat[pool.key] = (pred_cnt, hit_cnt, appear_cnt)
+
+    final_scores = {}
+    for pool in game.pools:
+        pred_cnt, hit_cnt, appear_cnt = stat[pool.key]
+        s_algo = stats.normalize(raw_scores[pool.key])
+        s_trust = stats.normalize(hit_cnt)
+        s_blind = stats.normalize([a - h for a, h in zip(appear_cnt, hit_cnt)])
+        final_scores[pool.key] = [s_algo[i] + W_TRUST * s_trust[i] + W_BLIND * s_blind[i]
+                                  for i in range(pool.max_number)]
+
+    main = game.main_pool
+    pred_m, hit_m, app_m = stat[main.key]
+    trust_list = [{"n": n, "hits": hit_m[n - 1], "pred": pred_m[n - 1]}
+                  for n in sorted(main.numbers, key=lambda n: -hit_m[n - 1])[:5] if hit_m[n - 1] > 0]
+    blind_list = [{"n": n, "blind": app_m[n - 1] - hit_m[n - 1], "appear": app_m[n - 1]}
+                  for n in sorted(main.numbers, key=lambda n: -(app_m[n - 1] - hit_m[n - 1]))[:5]
+                  if app_m[n - 1] - hit_m[n - 1] > 0]
+    trust_text = "、".join(f"{x['n']:02d}" for x in trust_list) or "（回测期无重复命中）"
+    blind_text = "、".join(f"{x['n']:02d}" for x in blind_list) or "（无明显盲区）"
+
+    combo_filter = filters.ComboFilter(draws, game)
+    main_sets = _generate_main_sets(game, final_scores[main.key], combo_filter, 1, rng)
+    sub_sets = _generate_sub_sets(game, final_scores[game.sub_pool.key], 1, rng)
+    numbers = {main.key: sorted(main_sets[0]), game.sub_pool.key: sorted(sub_sets[0])}
+
+    detail, heat_sum, heat_cnt = {}, 0.0, 0
+    for pool in game.pools:
+        pred_cnt, hit_cnt, appear_cnt = stat[pool.key]
+        s_algo = stats.normalize(raw_scores[pool.key])
+        fin = final_scores[pool.key]
+        items = []
+        for n in sorted(numbers[pool.key]):
+            items.append({"n": n, "final": round(fin[n - 1], 3), "algo": round(s_algo[n - 1], 3),
+                          "hits": hit_cnt[n - 1], "pred": pred_cnt[n - 1],
+                          "blind": appear_cnt[n - 1] - hit_cnt[n - 1],
+                          "freq": freq[pool.key][n - 1], "omission": omiss[pool.key][n - 1]})
+            heat_sum += fin[n - 1]
+            heat_cnt += 1
+        detail[pool.key] = items
+
+    s = bt["summary"]
+    summary = (f"以 {bt['algo_name']} 滚动回测近 {s['count']} 期为依据（主池均命中 {s['avg_main_hits']}，"
+               f"随机基线 {s['baseline_main_hits']}）：当前算法评分 + 回测「预测且命中」信任加成 40% "
+               f"+ 「常开出但漏掉」盲区补强 30%，融合后经历史分布约束出票。主池信任号：{trust_text}；"
+               f"盲区补强号：{blind_text}。")
+    return {
+        "game": game_key, "algo": algo_key, "algo_name": algo.name,
+        "window": len(draws), "backtest_count": s["count"],
+        "summary": summary,
+        "tickets": [{"numbers": numbers, "score": round(heat_sum / max(heat_cnt, 1) * 100, 1),
+                     "detail": detail}],
+        "analysis": {"backtest": s, "trust": trust_list, "blind": blind_list},
+    }
+
+
 # ---------- 预测跟踪 ----------
 
 def save_tracking(game_key, algo_key, params, issue_target, tickets):

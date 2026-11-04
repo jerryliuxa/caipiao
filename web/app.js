@@ -58,6 +58,7 @@ async function init() {
   $("#btn-update").addEventListener("click", updateData);
   $("#btn-predict").addEventListener("click", predict);
   $("#btn-backtest").addEventListener("click", backtest);
+  $("#btn-recommend").addEventListener("click", recommend);
   $("#btn-compare").addEventListener("click", toggleComparePicker);
   $("#btn-sim").addEventListener("click", runSimulation);
   $("#btn-track-refresh").addEventListener("click", loadTracking);
@@ -72,6 +73,7 @@ function selectGame(g) {
   $("#predict-result").innerHTML = "";
   $("#backtest-result").innerHTML = "";
   $("#compare-result").innerHTML = "";
+  $("#recommend-result").innerHTML = "";
   return Promise.all([loadStats(), loadHistory(), loadTracking()]);
 }
 
@@ -451,6 +453,7 @@ async function backtest() {
     const params = encodeURIComponent(JSON.stringify(collectParams()));
     const r = await api(`/api/backtest?game=${state.game}&algo=${state.algo}&window=${window}&count=30&params=${params}`);
     renderBacktest(r);
+    $("#recommend-result").innerHTML = "";
   } catch (e) {
     toast("回测失败: " + e.message);
   } finally {
@@ -500,6 +503,89 @@ function renderBacktest(r) {
         <tbody>${rows}</tbody>
       </table>
     </div>`;
+}
+
+/* ---------------- 回测择优荐号 ---------------- */
+async function recommend() {
+  const btn = $("#btn-recommend");
+  btn.disabled = true; btn.textContent = "分析中…";
+  try {
+    const window = $("#sel-window").value;
+    const params = encodeURIComponent(JSON.stringify(collectParams()));
+    const nonce = Date.now() % 1e9;
+    const r = await api(`/api/recommend?game=${state.game}&algo=${state.algo}&window=${window}&count=30&params=${params}&nonce=${nonce}`);
+    renderRecommend(r);
+  } catch (e) {
+    toast("荐号失败: " + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "🎯 回测荐号";
+  }
+}
+
+function renderRecommend(r) {
+  const game = state.games[r.game];
+  const t = r.tickets[0];
+  const balls = game.pools
+    .map((p) => ballsHTML(t.numbers[p.key], p.color))
+    .join(`<span class="sep">|</span>`);
+  const details = game.pools
+    .map(
+      (p) => t.detail[p.key]
+        .map(
+          (d) => `<span class="detail-item"><b class="${p.color === "red" ? "red-t" : "blue-t"}" style="color:${p.color === "red" ? "#ff7a6e" : "#6ea8ff"}">${fmt(d.n)}</b>
+            融合 ${d.final} · 算法 ${d.algo} · 回测命中 ${d.hits}/${d.pred} · 盲区 ${d.blind} · 遗漏 ${d.omission} 期</span>`
+        )
+        .join("")
+    )
+    .join("");
+  const pool = game.pools[0];
+  const trustRows = (r.analysis.trust || [])
+    .map((x) => `<tr><td><b>${fmt(x.n)}</b></td><td>命中 ${x.hits} 次</td><td>预测 ${x.pred} 次</td></tr>`)
+    .join("") || `<tr><td colspan="3" class="dim-t">回测期内无重复命中</td></tr>`;
+  const blindRows = (r.analysis.blind || [])
+    .map((x) => `<tr><td><b>${fmt(x.n)}</b></td><td>漏掉 ${x.blind} 次</td><td>共出现 ${x.appear} 次</td></tr>`)
+    .join("") || `<tr><td colspan="3" class="dim-t">无明显盲区</td></tr>`;
+
+  $("#recommend-result").innerHTML = `
+    <div class="summary"><div class="head">🎯 ${r.algo_name} · 回测择优荐号（基于近 ${r.backtest_count} 期回测分析，窗口 ${r.window} 期）</div>${r.summary}</div>
+    <div class="ticket">
+      <span class="no">推荐 1 注</span>
+      <span class="balls">${balls}</span>
+      <span class="score">融合热度 <b>${t.score}</b></span>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px 16px;padding:10px 4px 2px">${details}</div>
+    <div class="pred-actions">
+      <button class="btn sm" id="btn-rec-track" ${state.stats && !state.stats.empty ? "" : "disabled"}>💾 保存并跟踪此注（下期开奖自动核对）</button>
+      <span class="hint-inline">与普通预测一样进入「预测跟踪」战绩体系</span>
+    </div>
+    <div class="rank-table"><div class="rank-wrap">
+      <div class="rank-cols"><table><thead><tr><th colspan="3">${pool.name} 回测信任号（预测且命中）</th></tr></thead><tbody>${trustRows}</tbody></table></div>
+      <div class="rank-cols"><table><thead><tr><th colspan="3">${pool.name} 盲区补强号（常开出但漏掉）</th></tr></thead><tbody>${blindRows}</tbody></table></div>
+    </div></div>`;
+  $("#btn-rec-track").addEventListener("click", () => recTrackSave(r));
+}
+
+async function recTrackSave(r) {
+  try {
+    const body = {
+      game: r.game,
+      algo: r.algo,
+      params: collectParams(),
+      issue_target: state.stats ? state.stats.next_issue : "",
+      tickets: r.tickets.map((t) => t.numbers),
+    };
+    const resp = await fetch("/api/track", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || "保存失败");
+    toast(`荐号已保存 ${data.ids.length} 注，目标期号 ${body.issue_target}，开奖后自动核对`);
+    loadTracking();
+  } catch (e) {
+    toast("保存失败: " + e.message);
+  }
 }
 
 /* ---------------- 保存跟踪 / 导出 ---------------- */
