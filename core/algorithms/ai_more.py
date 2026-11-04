@@ -488,7 +488,211 @@ if AVAILABLE:
             return (f"当前形态所属原型（K={params.get('k', 8)}）下一期经验分布的 {m.name}高频号："
                     f"{top_text(scores[m.key], m.count)}。{game.sub_pool.name}首选：{top_text(scores[game.sub_pool.key], 1)}。")
 
+    # ---------------- BNN（贝叶斯神经网络，Bayes by Backprop） ----------------
+
+    def _bnn_scores(seq, N, hidden=16, epochs=35, lr=0.08, mc=20, prior_std=1.0, beta=5e-4, seed=1):
+        rng = np.random.default_rng(seed)
+        X, _ = _cumulative(seq)
+        T, H = len(X), hidden
+        shapes = {"W1": (N, H), "b1": (H,), "W2": (H, N), "b2": (N,)}
+        mu = {"W1": rng.normal(0, 0.25, shapes["W1"]), "b1": np.zeros(shapes["b1"]),
+              "W2": rng.normal(0, 0.25, shapes["W2"]), "b2": np.zeros(shapes["b2"])}
+        rho = {k: np.full(shapes[k], -2.0) for k in shapes}   # σ = softplus(ρ) ≈ 0.13
+        n_w = sum(np.size(v) for k, v in shapes.items())
+        prior2 = prior_std ** 2
+
+        def softplus(v):
+            return np.log1p(np.exp(v))
+
+        for _ in range(epochs):
+            eps_w = {k: rng.normal(0, 1, shapes[k]) for k in shapes}
+            W1 = mu["W1"] + softplus(rho["W1"]) * eps_w["W1"]
+            b1 = mu["b1"] + softplus(rho["b1"]) * eps_w["b1"]
+            W2 = mu["W2"] + softplus(rho["W2"]) * eps_w["W2"]
+            b2 = mu["b2"] + softplus(rho["b2"]) * eps_w["b2"]
+            Hn = np.maximum(X @ W1 + b1, 0)
+            P = _sigmoid(Hn @ W2 + b2)
+            dP = (P - X) / T                                  # BCE（按时间平均）
+            dW2 = Hn.T @ dP
+            db2 = dP.sum(0)
+            dH = dP @ W2.T * (Hn > 0)
+            dW1 = X.T @ dH
+            db1 = dH.sum(0)
+            dw = {"W1": dW1, "b1": db1, "W2": dW2, "b2": db2}
+            for k in shapes:
+                sigma = softplus(rho[k])
+                # 重参数化：dμ += dL/dw；dρ += dL/dw · ε · sigmoid(ρ)；加 KL(N(μ,σ)||N(0,prior)) 项
+                dmu = dw[k] + beta * mu[k] / prior2 / n_w
+                drho = dw[k] * eps_w[k] * _sigmoid(rho[k]) \
+                    + beta * (sigma / prior2 - 1.0 / sigma) * _sigmoid(rho[k]) / n_w
+                mu[k] -= lr * np.clip(dmu, -2, 2)
+                rho[k] -= lr * np.clip(drho, -2, 2)
+        # 蒙特卡洛预测：对后验采样 mc 次，取预测均值（后验预测分布）
+        outs = []
+        for _ in range(mc):
+            W1 = mu["W1"] + softplus(rho["W1"]) * rng.normal(0, 1, shapes["W1"])
+            b1 = mu["b1"] + softplus(rho["b1"]) * rng.normal(0, 1, shapes["b1"])
+            W2 = mu["W2"] + softplus(rho["W2"]) * rng.normal(0, 1, shapes["W2"])
+            b2 = mu["b2"] + softplus(rho["b2"]) * rng.normal(0, 1, shapes["b2"])
+            Hn = np.maximum(X[T - 1] @ W1 + b1, 0)
+            outs.append(_sigmoid(Hn @ W2 + b2))
+        return np.mean(outs, axis=0)
+
+    class BnnAlgorithm(Algorithm):
+        key = "bnn"
+        name = "贝叶斯神经网络 BNN"
+        category = "深度学习"
+        heavy = True
+        desc = "Bayes by Backprop：权重不是固定值而是「均值+方差」的变分高斯分布，训练目标为 ELBO（重构 + KL 到先验）；预测时对权重采样 20 次取均值——显式量化模型不确定性，适合小数据场景。"
+
+        def predict(self, draws, game, params):
+            def score(d, p):
+                seq = indicator(d, p)
+                N = p.max_number
+                return stats.normalize(_bnn_scores(seq, N, seed=_seed(d, p)))
+
+            return pool_predict(score, draws, game)
+
+        def summarize(self, draws, game, params, scores):
+            m = game.main_pool
+            return (f"贝叶斯后验预测分布（20 次权重采样均值）最高的 {m.name}号码：{top_text(scores[m.key], m.count)}。"
+                    f"{game.sub_pool.name}首选：{top_text(scores[game.sub_pool.key], 1)}。")
+
+    # ---------------- RSSM（循环状态空间模型，Dreamer 世界模型极简版） ----------------
+
+    def _rssm_scores(seq, N, hidden=16, zdim=6, epochs=20, lr=0.06, beta=0.05, mc=8, seed=1):
+        rng = np.random.default_rng(seed)
+        X, _ = _cumulative(seq)
+        T, H, Z = len(X), hidden, zdim
+        W_hh = rng.normal(0, 1 / np.sqrt(H), (H, H))
+        W_hz = rng.normal(0, 1 / np.sqrt(Z), (H, Z))
+        W_ho = rng.normal(0, 1 / np.sqrt(N), (H, N))
+        b_h = np.zeros(H)
+        W_mq, W_sq = rng.normal(0, 0.2, (Z, H)), rng.normal(0, 0.2, (Z, H))
+        b_mq, b_sq = np.zeros(Z), np.full(Z, -2.0)
+        W_mp, W_sp = rng.normal(0, 0.2, (Z, H)), rng.normal(0, 0.2, (Z, H))
+        W_d = rng.normal(0, 0.2, (H + Z, N))
+        b_d = np.zeros(N)
+
+        def run(h0, z0, obs, sample=True):
+            """前向整条序列：返回逐期状态/后验/先验/重建。obs 为观测序列"""
+            Tn = len(obs)
+            h = h0.copy()
+            z = z0.copy()
+            hs = np.zeros((Tn, H))
+            zs = np.zeros((Tn, Z))
+            eps_z = np.zeros((Tn, Z))
+            mu_q = np.zeros((Tn, Z))
+            sg_q = np.zeros((Tn, Z))
+            mu_p = np.zeros((Tn, Z))
+            sg_p = np.zeros((Tn, Z))
+            ps = np.zeros((Tn, N))
+            for t in range(Tn):
+                h = np.tanh(W_hh @ h + W_hz @ z + (W_ho @ obs[t - 1] if t > 0 else 0.0) + b_h)
+                hs[t] = h
+                mq = W_mq @ h + b_mq
+                sq = np.exp(0.5 * np.clip(W_sq @ h + b_sq, -8, 8))
+                mu_q[t], sg_q[t] = mq, sq
+                if t > 0:
+                    mu_p[t] = W_mp @ hs[t - 1]
+                    sg_p[t] = np.exp(0.5 * np.clip(W_sp @ hs[t - 1], -8, 8))
+                eps = rng.normal(0, 1, Z) if sample else np.zeros(Z)
+                eps_z[t] = eps
+                z = mq + sq * eps
+                zs[t] = z
+                ps[t] = _sigmoid(np.hstack([h, z]) @ W_d + b_d)
+            return hs, zs, eps_z, mu_q, sg_q, mu_p, sg_p, ps
+
+        for _ in range(epochs):
+            hs, zs, eps_z, mu_q, sg_q, mu_p, sg_p, ps = run(np.zeros(H), np.zeros(Z), X)
+            dW_hh = np.zeros((H, H))
+            dW_hz = np.zeros((H, Z))
+            dW_ho = np.zeros((H, N))
+            db_h = np.zeros(H)
+            dW_mq = np.zeros((Z, H))
+            dW_sq = np.zeros((Z, H))
+            db_mq = np.zeros(Z)
+            db_sq = np.zeros(Z)
+            dW_mp = np.zeros((Z, H))
+            dW_sp = np.zeros((Z, H))
+            dW_d = np.zeros((H + Z, N))
+            db_d = np.zeros(N)
+            dh_next = np.zeros(H)
+            dz_next = np.zeros(Z)
+            for t in range(T - 1, -1, -1):
+                dP = (ps[t] - X[t]) / T
+                hz_vec = np.hstack([hs[t], zs[t]])
+                dW_d += np.outer(hz_vec, dP)
+                db_d += dP
+                dh = W_d[:H] @ dP + dh_next
+                dz = W_d[H:] @ dP + dz_next
+                if t > 0:  # KL(q(z_t|h_t) || p(z_t|h_{t-1}))，对 μ/σ 的闭式梯度
+                    dmu_q_t = dz + beta * (mu_q[t] - mu_p[t]) / (sg_p[t] ** 2 * T)
+                    dsg_q_t = dz * sg_q[t] * eps_z[t] * 0.5 \
+                        + beta * (sg_q[t] / (sg_p[t] ** 2) - 1.0 / sg_q[t]) * sg_q[t] * 0.5 / T
+                    dmu_p_t = -beta * (mu_q[t] - mu_p[t]) / (sg_p[t] ** 2 * T)
+                    dsg_p_t = -beta * (1.0 / sg_p[t] - sg_q[t] ** 2 / (sg_p[t] ** 3)) * sg_p[t] * 0.5 / T
+                    dW_mp += np.outer(dmu_p_t, hs[t - 1])
+                    dW_sp += np.outer(dsg_p_t, hs[t - 1])
+                    dh_prev_prior = W_mp.T @ dmu_p_t + W_sp.T @ dsg_p_t
+                else:
+                    dmu_q_t = dz
+                    dsg_q_t = dz * sg_q[t] * eps_z[t] * 0.5
+                    dh_prev_prior = np.zeros(H)
+                dh += W_mq.T @ dmu_q_t + W_sq.T @ dsg_q_t
+                dW_mq += np.outer(dmu_q_t, hs[t])
+                dW_sq += np.outer(dsg_q_t, hs[t])
+                db_mq += dmu_q_t
+                db_sq += dsg_q_t
+                dh_pre = dh * (1 - hs[t] ** 2)
+                dW_hh += np.outer(dh_pre, hs[t - 1] if t > 0 else np.zeros(H))
+                dW_hz += np.outer(dh_pre, zs[t - 1] if t > 0 else np.zeros(Z))
+                dW_ho += np.outer(dh_pre, X[t - 1] if t > 0 else np.zeros(N))
+                db_h += dh_pre
+                dh_next = W_hh.T @ dh_pre
+                dz_next = W_hz.T @ dh_pre
+                if t > 0:
+                    dh_next += dh_prev_prior
+            for P_, G in ((W_hh, dW_hh), (W_hz, dW_hz), (W_ho, dW_ho), (b_h, db_h),
+                          (W_mq, dW_mq), (W_sq, dW_sq), (b_mq, db_mq), (b_sq, db_sq),
+                          (W_mp, dW_mp), (W_sp, dW_sp), (W_d, dW_d), (b_d, db_d)):
+                np.clip(G, -1, 1, out=G)
+                P_ -= lr * G
+        # 「想象」下一期：先验采样 z_T → 递推 h_T → 解码，MC 平均
+        hs, zs, _, _, _, _, sg_p_last_mu, _ = run(np.zeros(H), np.zeros(Z), X)
+        h_last = hs[T - 1]
+        z_last = zs[T - 1]
+        outs = []
+        for _ in range(mc):
+            mu_p = W_mp @ h_last
+            sg_p = np.exp(0.5 * np.clip(W_sp @ h_last, -8, 8))
+            z_next = mu_p + sg_p * rng.normal(0, 1, Z)
+            h_next = np.tanh(W_hh @ h_last + W_hz @ z_last + W_ho @ X[T - 1] + b_h)
+            outs.append(_sigmoid(np.hstack([h_next, z_next]) @ W_d + b_d))
+        return np.mean(outs, axis=0)
+
+    class RssmAlgorithm(Algorithm):
+        key = "rssm"
+        name = "循环状态空间 RSSM"
+        category = "深度学习"
+        heavy = True
+        desc = "Dreamer 世界模型的极简版：确定性状态 h 与随机状态 z 双链演化，后验 q(z|h) 与先验 p(z|h_{t-1}) 的 KL + 重建构成 ELBO；预测时在先验上采样「想象」下一期分布——处理时序不确定性的生成式思路。"
+
+        def predict(self, draws, game, params):
+            def score(d, p):
+                seq = indicator(d, p)
+                N = p.max_number
+                return stats.normalize(_rssm_scores(seq, N, seed=_seed(d, p)))
+
+            return pool_predict(score, draws, game)
+
+        def summarize(self, draws, game, params, scores):
+            m = game.main_pool
+            return (f"状态空间「想象」（8 次先验采样均值）最高的 {m.name}号码：{top_text(scores[m.key], m.count)}。"
+                    f"{game.sub_pool.name}首选：{top_text(scores[game.sub_pool.key], 1)}。")
+
     ALGORITHMS = [LstmAlgorithm(), TransformerAlgorithm(), RbmAlgorithm(), EsnAlgorithm(),
-                  SkipGramAlgorithm(), KnnCaseAlgorithm(), KMeansAlgorithm()]
+                  SkipGramAlgorithm(), KnnCaseAlgorithm(), KMeansAlgorithm(),
+                  BnnAlgorithm(), RssmAlgorithm()]
 else:
     ALGORITHMS = []

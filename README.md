@@ -1,6 +1,6 @@
 # 号彩智算 · 8 种彩票数据分析预测平台
 
-一个本地运行的彩票历史数据分析与号码生成平台，支持 **双色球、大乐透、美国强力球（Powerball）、超级百万（Mega Millions）、欧洲百万（EuroMillions）、欧洲大奖（Eurojackpot）、欧洲梦想（EuroDreams）、维京乐透（Viking Lotto）** 八种游戏。国内游戏数据抓取自 **500.com**，美国与欧洲游戏使用 GitHub 上自动更新的数据集与官方 API。内置 **42 种可选算法**（含统计、概率、机器学习、深度学习、组合优化等大类，其中 3 种源自盖尔·霍华德《彩票中奖指南》的经典体系）为每个号码打分，结合历史分布约束生成号码组合，附带滚动回测功能检验算法的历史表现。
+一个本地运行的彩票历史数据分析与号码生成平台，支持 **双色球、大乐透、美国强力球（Powerball）、超级百万（Mega Millions）、欧洲百万（EuroMillions）、欧洲大奖（Eurojackpot）、欧洲梦想（EuroDreams）、维京乐透（Viking Lotto）** 八种游戏。国内游戏数据抓取自 **500.com**，美国与欧洲游戏使用 GitHub 上自动更新的数据集与官方 API。内置 **44 种可选算法**（含统计、概率、机器学习、深度学习、组合优化等大类，其中 3 种源自盖尔·霍华德《彩票中奖指南》的经典体系）为每个号码打分，结合历史分布约束生成号码组合，附带滚动回测功能检验算法的历史表现。
 
 > ⚠️ **免责声明**：彩票每期开奖都是独立随机事件，历史统计无法真正预测未来。本平台所有"预测"仅是基于历史数据的统计工具与娱乐参考，**不构成任何购彩建议**。请理性购彩。
 
@@ -17,7 +17,7 @@
   - 维京乐透（主号 48 选 6 + 维京号 8 选 1，每周三开奖，北欧波罗的海八国联营）
 - **数据管理**：一键拉取最新开奖（首次启动自动抓取近 300 期），本地 SQLite 存储、增量去重；美国数据网络不可用时自动回退内置快照
 - **统计分析**：号码热度图（频率 + 遗漏 tooltip）、出现频率 / 当前遗漏柱状图、和值走势（含 P10~P90 区间带）、奇偶分布、**号码共现热力图**
-- **42 种预测算法**：按六大分类分组展示，部分算法带可调参数
+- **44 种预测算法**：按六大分类分组展示，部分算法带可调参数
 - **号码生成**：按评分加权抽样，自动套用历史分布约束（和值、奇偶、大小、质合、三分区、012路、AC 值、跨度、尾数、连号、重号），抽样失败时逐级放宽
 - **滚动回测**：对最近 30 期逐期"只用之前的数据"预测一注，统计命中情况并与随机基线对比（带缓存，重复回测即时返回）
 - **回测择优荐号**：基于近 30 期滚动回测的逐号统计，把「预测且命中」的信任加成（40%）与「常开出但漏掉」的盲区补强（30%）融合进算法评分，一键生成一注荐号——附逐号融合明细、信任号/盲区号分析表，可保存跟踪
@@ -36,7 +36,7 @@
 python app.py
 ```
 
-可选增强（解锁全部 42 个算法）：
+可选增强（解锁全部 44 个算法）：
 
 ```bat
 pip install numpy scikit-learn
@@ -72,7 +72,7 @@ pip install numpy scikit-learn
 
 **机器学习（7，需 numpy/sklearn）**：逻辑回归（14+N 维特征工程）、梯度提升树 GBDT、随机森林、神经网络 MLP、支持向量机 SVM（RBF 核决策函数）、相似期检索 kNN（频率画像指纹 + 案例加权投票）、聚类原型 K-Means（形态原型下一期经验分布）
 
-**深度学习（11，需 numpy，均为手写反向传播的轻量实现）**：循环神经网络 RNN（Elman + BPTT）、**LSTM 门控循环**（三 gates + 细胞状态 + 截断 BPTT）、Transformer 注意力（单头自注意力 + 可训练读出）、**Transformer 编码器**（正弦位置编码 + 2 头因果自注意力 + LayerNorm + 前馈 + 残差，手写反向）、1D 卷积网络（多尺度卷积核 + 线性头）、图神经网络 GNN（共现图两层消息传递）、生成对抗 GAN、变分自编码器 VAE、**受限玻尔兹曼机 RBM**（CD-1 对比散度 + 条件激活）、**储备池计算 ESN**（固定随机递归池 + 脊回归读出，无反向传播）、**Skip-Gram 号码嵌入**（负采样 Word2Vec 思想 + 近期语义中心相似度）
+**深度学习（11，需 numpy，均为手写反向传播的轻量实现）**：循环神经网络 RNN（Elman + BPTT）、**LSTM 门控循环**（三 gates + 细胞状态 + 截断 BPTT）、Transformer 注意力（单头自注意力 + 可训练读出）、**Transformer 编码器**（正弦位置编码 + 2 头因果自注意力 + LayerNorm + 前馈 + 残差，手写反向）、1D 卷积网络（多尺度卷积核 + 线性头）、图神经网络 GNN（共现图两层消息传递）、生成对抗 GAN、变分自编码器 VAE、**受限玻尔兹曼机 RBM**（CD-1 对比散度 + 条件激活）、**储备池计算 ESN**（固定随机递归池 + 脊回归读出，无反向传播）、**Skip-Gram 号码嵌入**（负采样 Word2Vec 思想 + 近期语义中心相似度）、**贝叶斯神经网络 BNN**（Bayes by Backprop 变分权重 + 蒙特卡洛后验预测）、**循环状态空间 RSSM**（Dreamer 世界模型极简版：h/z 双链 + 先验/后验 KL + 想象解码）
 
 **时序预测（1，需 numpy）**：时序分解全家桶——对主池和值同时拟合 ARIMA（小阶网格）、Holt-Winters、Haar 小波、SSA 奇异谱、Prophet 式趋势+星期季节五种均值模型与 GARCH(1,1) 波动率，按"和值落在预测区间"的条件频率为号码打分
 
@@ -130,7 +130,7 @@ pip install numpy scikit-learn
 | `/api/tracking?game=ssq&limit=60` | 跟踪记录 + 算法战绩（调用时自动结算已开奖预测） |
 | `/api/compare?game=ssq&algos=a,b,c&window=100&backtest=8` | 多算法并排对比 |
 
-`game`：`ssq` / `dlt` / `pb`（美国强力球）/ `mm`（超级百万）/ `em`（欧洲百万）/ `ej`（欧洲大奖）/ `ed`（欧洲梦想）/ `vl`（维京乐透）；`algo`：见算法清单的 key（`ensemble` / `stacking` / `hot` / `cold` / `omission` / `markov` / `period` / `monte` / `survival` / `hmm` / `kalman` / `changepoint` / `kde` / `mcmc` / `ngram` / `thompson` / `adjacency` / `momentum` / `pairchain` / `genetic` / `cooccurrence` / `antiheat` / `cover` / `logistic` / `gbdt` / `rf` / `mlp` / `timeseries` / `rnn` / `attention` / `cnn` / `gnn` / `gan` / `vae` / `lstm` / `transformer` / `rbm` / `esn` / `skipgram` / `svm` / `knncase` / `kmeans`）。
+`game`：`ssq` / `dlt` / `pb`（美国强力球）/ `mm`（超级百万）/ `em`（欧洲百万）/ `ej`（欧洲大奖）/ `ed`（欧洲梦想）/ `vl`（维京乐透）；`algo`：见算法清单的 key（`ensemble` / `stacking` / `hot` / `cold` / `omission` / `markov` / `period` / `monte` / `survival` / `hmm` / `kalman` / `changepoint` / `kde` / `mcmc` / `ngram` / `thompson` / `adjacency` / `momentum` / `pairchain` / `genetic` / `cooccurrence` / `antiheat` / `cover` / `logistic` / `gbdt` / `rf` / `mlp` / `timeseries` / `rnn` / `attention` / `cnn` / `gnn` / `gan` / `vae` / `lstm` / `transformer` / `rbm` / `esn` / `skipgram` / `svm` / `knncase` / `kmeans` / `bnn` / `rssm`）。
 
 美国与欧洲游戏无统一官方期号，以开奖日期 `YYYYMMDD` 作为期号，跟踪目标即下一开奖日。
 
