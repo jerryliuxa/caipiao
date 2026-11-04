@@ -1,7 +1,9 @@
 """预测与回测编排：评分 → 约束抽样生成号码组合 → 回测验证"""
 import hashlib
 import json
+import os
 import random
+import time
 
 from . import filters, stats
 from .algorithms import get_algorithm
@@ -84,6 +86,38 @@ def _generate_sub_sets(game, scores, n_sets, rng, greedy_first=True, power=3.0):
 
 
 _backtest_cache = {}
+_CACHE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                           "data", "backtest_cache.json")
+_last_cache_save = 0.0
+
+
+def _load_backtest_cache():
+    """启动时从磁盘恢复回测缓存——深度学习回测动辄数分钟，服务重启不应重算"""
+    try:
+        with open(_CACHE_PATH, "r", encoding="utf-8") as f:
+            _backtest_cache.update(json.load(f))
+    except Exception:
+        pass
+
+
+def _save_backtest_cache():
+    """落盘回测缓存（限 300 条、5 秒节流，避免高频小写入）"""
+    global _last_cache_save
+    if time.time() - _last_cache_save < 5:
+        return
+    _last_cache_save = time.time()
+    try:
+        if len(_backtest_cache) > 300:
+            for k in list(_backtest_cache)[: len(_backtest_cache) - 300]:
+                _backtest_cache.pop(k, None)
+        os.makedirs(os.path.dirname(_CACHE_PATH), exist_ok=True)
+        with open(_CACHE_PATH, "w", encoding="utf-8") as f:
+            json.dump(_backtest_cache, f, ensure_ascii=False)
+    except Exception:
+        pass
+
+
+_load_backtest_cache()
 
 
 def _core_predict(draws, game, algo, params, n_sets, rng, cache_key=None):
@@ -107,6 +141,7 @@ def _core_predict(draws, game, algo, params, n_sets, rng, cache_key=None):
         if len(_backtest_cache) > 800:
             _backtest_cache.clear()
         _backtest_cache[cache_key] = result
+        _save_backtest_cache()
     return result
 
 
@@ -199,6 +234,7 @@ def backtest(game_key, algo_key, window=100, count=30, algo_params=None):
 
     n = max(len(rows), 1)
     threshold = 3 if m.count >= 5 else 2
+    _save_backtest_cache()  # 回测收尾强制落盘，避免节流漏存最后几条
     summary = {
         "count": len(rows),
         "avg_main_hits": round(sum(r["main_hits"] for r in rows) / n, 3),
