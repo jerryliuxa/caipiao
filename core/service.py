@@ -16,13 +16,14 @@ def _make_rng(game_key, algo_key, window, nonce, last_issue):
     return random.Random(seed)
 
 
-def _generate_main_sets(game, scores, combo_filter, n_sets, rng, greedy_first=True):
+def _generate_main_sets(game, scores, combo_filter, n_sets, rng, greedy_first=True, power=3.0):
     """主池组合：默认首注取评分 Top-K（回测/预测用，保证可复现），其余按评分加权抽样并逐级放宽形态约束；
-    greedy_first=False 时全部随机加权抽样（荐号用，每次点击刷新一批）"""
+    greedy_first=False 时全部随机加权抽样（荐号用，每次点击刷新一批）；
+    power 控制加权锐度（3=高度偏向高分号，1=接近均匀，荐号用低值增大批间多样性）"""
     k = game.main_pool.count
     ranked = sorted(game.main_pool.numbers, key=lambda n: -scores[n - 1])
     top = ranked[: k * 3]
-    weights = [max(scores[n - 1], 1e-6) ** 3 for n in top]
+    weights = [max(scores[n - 1], 1e-6) ** power for n in top]
 
     sets, seen = [], set()
     greedy = tuple(sorted(ranked[:k]))
@@ -51,7 +52,7 @@ def _generate_main_sets(game, scores, combo_filter, n_sets, rng, greedy_first=Tr
     return sets[:n_sets]
 
 
-def _generate_sub_sets(game, scores, n_sets, rng, greedy_first=True):
+def _generate_sub_sets(game, scores, n_sets, rng, greedy_first=True, power=3.0):
     """副池组合：单号轮换 Top-3；双号抽样 Top-6。greedy_first=False 时打乱首选（荐号用）"""
     sub = game.sub_pool
     ranked = sorted(sub.numbers, key=lambda n: -scores[n - 1])
@@ -63,7 +64,7 @@ def _generate_sub_sets(game, scores, n_sets, rng, greedy_first=True):
         rng.shuffle(order)
         return [[n] for n in (order[i % len(order)] for i in range(n_sets))]
     top = ranked[:6]
-    weights = [max(scores[n - 1], 1e-6) ** 3 for n in top]
+    weights = [max(scores[n - 1], 1e-6) ** power for n in top]
     pairs, seen = [], set()
     first = tuple(sorted(top[:2]))
     if greedy_first:
@@ -275,8 +276,11 @@ def recommend_after_backtest(game_key, algo_key, window=100, count=30, n_sets=5,
 
     combo_filter = filters.ComboFilter(draws, game)
     n_sets = max(1, min(int(n_sets), 20))
-    main_sets = _generate_main_sets(game, final_scores[main.key], combo_filter, n_sets, rng, greedy_first=False)
-    sub_sets = _generate_sub_sets(game, final_scores[game.sub_pool.key], n_sets, rng, greedy_first=False)
+    # 荐号用低锐度抽样（power=1.2）：信任/盲区号仍更常出现，但每批组合明显不同
+    main_sets = _generate_main_sets(game, final_scores[main.key], combo_filter, n_sets, rng,
+                                    greedy_first=False, power=1.2)
+    sub_sets = _generate_sub_sets(game, final_scores[game.sub_pool.key], n_sets, rng,
+                                  greedy_first=False, power=1.2)
 
     tickets = []
     for i in range(n_sets):
