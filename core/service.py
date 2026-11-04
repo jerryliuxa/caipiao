@@ -310,6 +310,7 @@ def recommend_after_backtest(game_key, algo_key, window=100, count=30, n_sets=5,
     return {
         "game": game_key, "algo": algo_key, "algo_name": algo.name,
         "window": len(draws), "backtest_count": s["count"], "n_sets": n_sets,
+        "based_on": {"from": draws[0]["issue"], "to": draws[-1]["issue"], "count": len(draws)},
         "summary": summary,
         "tickets": tickets,
         "analysis": {"backtest": s, "trust": trust_list, "blind": blind_list},

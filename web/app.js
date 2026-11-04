@@ -373,6 +373,7 @@ async function predict() {
     const r = await api(`/api/predict?game=${state.game}&algo=${state.algo}&window=${window}&sets=${sets}&nonce=${nonce}&params=${params}`);
     renderPredict(game, r);
     $("#backtest-result").innerHTML = "";
+    $("#recommend-result").innerHTML = "";
   } catch (e) {
     toast("预测失败: " + e.message);
   } finally {
@@ -433,7 +434,7 @@ function renderPredict(game, r) {
     <div class="rank-table"><div class="rank-wrap">${ranking}</div></div>`;
 
   $("#btn-track").addEventListener("click", trackSave);
-  $("#btn-export").addEventListener("click", exportCSV);
+  $("#btn-export").addEventListener("click", () => exportCSV(state.lastPredict));
 
   document.querySelectorAll("#predict-result .ticket").forEach((el) => {
     el.addEventListener("click", () => {
@@ -516,6 +517,7 @@ async function recommend() {
     const nonce = Date.now() % 1e9;
     const r = await api(`/api/recommend?game=${state.game}&algo=${state.algo}&window=${window}&count=30&sets=${sets}&params=${params}&nonce=${nonce}`);
     renderRecommend(r);
+    $("#predict-result").innerHTML = "";  // 单一当前结果：荐号生效时清掉旧预测区，避免保存/导出错对象
     toast(`已重新分析并生成 ${r.n_sets} 注新荐号（可无限次点击刷新）`);
   } catch (e) {
     toast("荐号失败: " + e.message);
@@ -562,6 +564,7 @@ function renderRecommend(r) {
     <div class="tickets">${tickets}</div>
     <div class="pred-actions">
       <button class="btn sm" id="btn-rec-track" ${state.stats && !state.stats.empty ? "" : "disabled"}>💾 保存并跟踪全部 ${r.n_sets} 注（下期开奖自动核对）</button>
+      <button class="btn sm" id="btn-rec-export">⬇ 导出 CSV</button>
       <span class="hint-inline">每次点击整批重新抽样；与普通预测一样进入「预测跟踪」战绩体系</span>
     </div>
     <div class="rank-table"><div class="rank-wrap">
@@ -569,6 +572,7 @@ function renderRecommend(r) {
       <div class="rank-cols"><table><thead><tr><th colspan="3">${pool.name} 盲区补强号（常开出但漏掉）</th></tr></thead><tbody>${blindRows}</tbody></table></div>
     </div></div>`;
   $("#btn-rec-track").addEventListener("click", () => recTrackSave(r));
+  $("#btn-rec-export").addEventListener("click", () => exportCSV(r));
 }
 
 async function recTrackSave(r) {
@@ -619,10 +623,12 @@ async function trackSave() {
   }
 }
 
-function exportCSV() {
-  const r = state.lastPredict;
+function exportCSV(r) {
+  r = r || state.lastPredict;
   if (!r) return;
-  const game = state.games[state.game];
+  const game = state.games[r.game];
+  const based = r.based_on || { count: r.window || 0, from: "", to: "" };
+  const kind = r.backtest_count ? "荐号" : "预测";
   const lines = ["注号,池,号码,综合热度"];
   r.tickets.forEach((t, i) => {
     game.pools.forEach((p) => {
@@ -630,15 +636,16 @@ function exportCSV() {
     });
   });
   lines.push("");
+  lines.push(`类型,${kind}${kind === "荐号" ? `（基于近 ${r.backtest_count} 期回测融合）` : ""}`);
   lines.push(`算法,${r.algo_name}`);
-  lines.push(`基于,${r.based_on.count}期(${r.based_on.from}~${r.based_on.to})`);
+  lines.push(`基于,${based.count}期(${based.from}~${based.to})`);
   const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `预测_${r.game}_${r.algo}_${Date.now()}.csv`;
+  a.download = `${kind}_${r.game}_${r.algo}_${Date.now()}.csv`;
   a.click();
   URL.revokeObjectURL(a.href);
-  toast("CSV 已导出");
+  toast(`${kind} CSV 已导出`);
 }
 
 /* ---------------- 算法对比 ---------------- */
