@@ -331,7 +331,7 @@ function renderAlgoCards() {
       const cards = state.algos
         .filter((a) => a.category === cat)
         .map(
-          (a) => `<div class="algo-card ${a.key === state.algo ? "active" : ""}" data-algo="${a.key}">
+          (a) => `<div class="algo-card ${a.key === state.algo ? "active" : ""}" data-algo="${a.key}" title="${a.desc}">
             <div class="name"><span class="dot"></span>${a.name}${a.key === "ensemble" ? '<span class="tag">基础</span>' : ""}${a.key === "stacking" ? '<span class="tag">推荐</span>' : ""}${a.heavy ? '<span class="tag heavy">numpy</span>' : ""}</div>
             <div class="desc">${a.desc}</div>
           </div>`
