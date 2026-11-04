@@ -491,6 +491,7 @@ async function backtest() {
     const r = await api(`/api/backtest?game=${state.game}&algo=${state.algo}&window=${window}&count=30&params=${params}`);
     renderBacktest(r);
     saveResult("backtest", r);
+    $("#predict-result").innerHTML = "";
     $("#recommend-result").innerHTML = "";
   } catch (e) {
     toast("回测失败: " + e.message);
@@ -556,7 +557,8 @@ async function recommend() {
     const r = await api(`/api/recommend?game=${state.game}&algo=${state.algo}&window=${window}&count=30&sets=${sets}&params=${params}&nonce=${nonce}`);
     renderRecommend(r);
     saveResult("recommend", r);
-    $("#predict-result").innerHTML = "";  // 单一当前结果：荐号生效时清掉旧预测区，避免保存/导出错对象
+    $("#predict-result").innerHTML = "";
+    $("#backtest-result").innerHTML = "";  // 三个结果区互斥：单一当前结果，避免保存/导出错对象
     toast(`已重新分析并生成 ${r.n_sets} 注新荐号（可无限次点击刷新）`);
   } catch (e) {
     toast("荐号失败: " + e.message);
