@@ -80,33 +80,43 @@ function selectGame(g) {
   return Promise.all([loadStats(), loadHistory(), loadTracking()]).then(() => restoreResult());
 }
 
-/* ---- 结果持久化：localStorage 按游戏保存最近一次结果，刷新页面后自动恢复 ---- */
+/* ---- 结果持久化：选号（预测/荐号互斥）与回测分析分键保存，刷新页面后都恢复 ---- */
 function saveResult(type, r) {
-  try { localStorage.setItem(`lotto_result_${state.game}`, JSON.stringify({ type, r })); }
-  catch (e) { /* 存储超限静默忽略 */ }
+  try {
+    if (type === "backtest") {
+      localStorage.setItem(`lotto_backtest_${state.game}`, JSON.stringify(r));
+    } else {
+      localStorage.setItem(`lotto_selection_${state.game}`, JSON.stringify({ type, r }));
+    }
+  } catch (e) { /* 存储超限静默忽略 */ }
 }
 
 function restoreResult() {
-  let saved = null;
-  try { saved = JSON.parse(localStorage.getItem(`lotto_result_${state.game}`) || "null"); } catch (e) { saved = null; }
-  if (!saved || !saved.r) return;
   const game = state.games[state.game];
-  try {
-    // 恢复对应的算法选中态与参数
-    if (saved.r.algo) {
-      state.algo = saved.r.algo;
-      document.querySelectorAll(".algo-card").forEach((c) => c.classList.toggle("active", c.dataset.algo === saved.r.algo));
-      renderAlgoParams();
-    }
-    if (saved.type === "predict") {
-      state.lastPredict = saved.r;
-      renderPredict(game, saved.r);
-    } else if (saved.type === "backtest") {
-      renderBacktest(saved.r);
-    } else if (saved.type === "recommend") {
-      renderRecommend(saved.r);
-    }
-  } catch (e) { /* 恢复失败静默忽略 */ }
+  // 恢复当前选号（预测或荐号，二选一）
+  let sel = null;
+  try { sel = JSON.parse(localStorage.getItem(`lotto_selection_${state.game}`) || "null"); } catch (e) { sel = null; }
+  if (sel && sel.r) {
+    try {
+      if (sel.r.algo) {
+        state.algo = sel.r.algo;
+        document.querySelectorAll(".algo-card").forEach((c) => c.classList.toggle("active", c.dataset.algo === sel.r.algo));
+        renderAlgoParams();
+      }
+      if (sel.type === "predict") {
+        state.lastPredict = sel.r;
+        renderPredict(game, sel.r);
+      } else if (sel.type === "recommend") {
+        renderRecommend(sel.r);
+      }
+    } catch (e) { /* 恢复失败静默忽略 */ }
+  }
+  // 恢复回测分析（与选号独立共存）
+  let bt = null;
+  try { bt = JSON.parse(localStorage.getItem(`lotto_backtest_${state.game}`) || "null"); } catch (e) { bt = null; }
+  if (bt) {
+    try { renderBacktest(bt); } catch (e) { /* 静默 */ }
+  }
 }
 
 /* ---------------- 数据栏 / 统计 ---------------- */
@@ -405,8 +415,7 @@ async function predict() {
     const r = await api(`/api/predict?game=${state.game}&algo=${state.algo}&window=${window}&sets=${sets}&nonce=${nonce}&params=${params}`);
     renderPredict(game, r);
     saveResult("predict", r);
-    $("#backtest-result").innerHTML = "";
-    $("#recommend-result").innerHTML = "";
+    $("#recommend-result").innerHTML = "";  // 选号互斥：预测与荐号二选一（回测区为分析面板，保留）
   } catch (e) {
     toast("预测失败: " + e.message);
   } finally {
@@ -490,9 +499,7 @@ async function backtest() {
     const params = encodeURIComponent(JSON.stringify(collectParams()));
     const r = await api(`/api/backtest?game=${state.game}&algo=${state.algo}&window=${window}&count=30&params=${params}`);
     renderBacktest(r);
-    saveResult("backtest", r);
-    $("#predict-result").innerHTML = "";
-    $("#recommend-result").innerHTML = "";
+    saveResult("backtest", r);  // 回测是分析面板，不清任何选号
   } catch (e) {
     toast("回测失败: " + e.message);
   } finally {
@@ -557,8 +564,7 @@ async function recommend() {
     const r = await api(`/api/recommend?game=${state.game}&algo=${state.algo}&window=${window}&count=30&sets=${sets}&params=${params}&nonce=${nonce}`);
     renderRecommend(r);
     saveResult("recommend", r);
-    $("#predict-result").innerHTML = "";
-    $("#backtest-result").innerHTML = "";  // 三个结果区互斥：单一当前结果，避免保存/导出错对象
+    $("#predict-result").innerHTML = "";  // 选号互斥：荐号与预测二选一（回测区为分析面板，保留）
     toast(`已重新分析并生成 ${r.n_sets} 注新荐号（可无限次点击刷新）`);
   } catch (e) {
     toast("荐号失败: " + e.message);
@@ -681,8 +687,6 @@ async function toggleBtHistory() {
           const run = await api(`/api/backtest_run?id=${b.dataset.run}`);
           renderBacktest(run);
           saveResult("backtest", run);
-          $("#predict-result").innerHTML = "";
-          $("#recommend-result").innerHTML = "";
           document.querySelector("#backtest-result").scrollIntoView({ block: "start" });
         } catch (e) {
           toast("加载存档失败: " + e.message);
