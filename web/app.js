@@ -449,6 +449,9 @@ function renderPredict(game, r) {
 async function backtest() {
   const btn = $("#btn-backtest");
   btn.disabled = true; btn.textContent = "回测中…";
+  // 深度学习算法回测耗时较长，禁用其他会清空结果区的按钮，避免渲染被中途打断
+  const others = ["#btn-predict", "#btn-recommend", "#btn-compare"].map((s) => $(s));
+  others.forEach((b) => (b.disabled = true));
   try {
     const window = $("#sel-window").value;
     const params = encodeURIComponent(JSON.stringify(collectParams()));
@@ -459,6 +462,7 @@ async function backtest() {
     toast("回测失败: " + e.message);
   } finally {
     btn.disabled = false; btn.textContent = "📈 回测验证（近30期）";
+    others.forEach((b) => (b.disabled = false));
   }
 }
 
