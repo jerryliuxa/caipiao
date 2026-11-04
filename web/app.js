@@ -516,6 +516,7 @@ async function recommend() {
     const nonce = Date.now() % 1e9;
     const r = await api(`/api/recommend?game=${state.game}&algo=${state.algo}&window=${window}&count=30&sets=${sets}&params=${params}&nonce=${nonce}`);
     renderRecommend(r);
+    toast(`已重新分析并生成 ${r.n_sets} 注新荐号（可无限次点击刷新）`);
   } catch (e) {
     toast("荐号失败: " + e.message);
   } finally {
