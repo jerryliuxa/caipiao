@@ -114,7 +114,7 @@ main { max-width: 1280px; margin: 0 auto; padding: 14px 20px 44px; display: flex
 
 /* ---------- 算法卡片 ---------- */
 #algo-cards { display: flex; flex-direction: row; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
-.algo-group { margin-bottom: 0; flex: 1 1 170px; min-width: 168px; }
+.algo-group { margin-bottom: 0; flex: 0 0 154px; min-width: 154px; }
 .algo-cat { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 8px; display: flex; align-items: baseline; gap: 8px; }
 .algo-cat::before { content: ""; width: 4px; height: 13px; border-radius: 2px; background: linear-gradient(180deg, var(--accent), var(--accent2)); }
 .algo-cat span { font-size: 11px; color: var(--muted); font-weight: 400; }
