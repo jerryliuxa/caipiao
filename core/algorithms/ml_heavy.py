@@ -15,6 +15,7 @@ try:
     from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
     from sklearn.linear_model import LogisticRegression
     from sklearn.neural_network import MLPClassifier
+    from sklearn.svm import SVC
     AVAILABLE = True
 except ImportError:  # pragma: no cover
     AVAILABLE = False
@@ -119,6 +120,33 @@ if AVAILABLE:
             m = game.main_pool
             return (f"MLP（隐层 {params.get('hidden', 24)} 神经元）输出的 {m.name}高概率号：{top_text(scores[m.key], m.count)}。"
                     f"{game.sub_pool.name}首选：{top_text(scores[game.sub_pool.key], 1)}。")
+
+    class SvmAlgorithm(Algorithm):
+        key = "svm"
+        name = "支持向量机 SVM"
+        category = "机器学习"
+        heavy = True
+        desc = "RBF 核支持向量机：把逐(期,号码)特征映射到高维核空间找最大间隔分界面，决策函数值作为出现倾向评分——小样本上稳健的经典核方法。"
+        params = [{"key": "C", "label": "惩罚系数 C", "default": 1.0, "min": 0.2, "max": 3.0, "step": 0.2}]
+
+        def predict(self, draws, game, params):
+            C = float(params.get("C", 1.0))
+
+            def score(d, p):
+                X, y, X_next, N = build_supervised(d, p)
+                if len(X) < 50:
+                    freq = stats.frequency(d, p)
+                    return stats.normalize([c + 1.0 for c in freq])
+                model = SVC(kernel="rbf", C=C, gamma="scale")
+                model.fit(X, y)
+                return stats.normalize(model.decision_function(X_next).tolist())
+
+            return pool_predict(score, draws, game)
+
+        def summarize(self, draws, game, params, scores):
+            m = game.main_pool
+            return (f"RBF-SVM（C={params.get('C', 1.0)}）决策函数最高的 {m.name}号码："
+                    f"{top_text(scores[m.key], m.count)}。{game.sub_pool.name}首选：{top_text(scores[game.sub_pool.key], 1)}。")
 
     # ---------------- 时序分解全家桶（和值预测 → 条件频率） ----------------
 
@@ -293,6 +321,6 @@ if AVAILABLE:
         return game.draw_weekdays[0]
 
     ALGORITHMS = [LogisticAlgorithm(), GbdtAlgorithm(), RandomForestAlgorithm(),
-                  MlpAlgorithm(), TimeSeriesAlgorithm()]
+                  MlpAlgorithm(), SvmAlgorithm(), TimeSeriesAlgorithm()]
 else:
     ALGORITHMS = []
