@@ -3,7 +3,7 @@ from .base import Algorithm
 from .statistical import (HotAlgorithm, ColdAlgorithm, OmissionAlgorithm,
                           MarkovAlgorithm, PeriodAlgorithm, MonteCarloAlgorithm)
 from .ensemble import EnsembleAlgorithm
-from . import advanced, optimize, stacking
+from . import advanced, optimize, stacking, howard
 from . import ml_heavy, dl_numpy
 
 
@@ -14,6 +14,7 @@ def _build():
         MarkovAlgorithm(), PeriodAlgorithm(), MonteCarloAlgorithm(),
     ]
     algos += advanced.ALGORITHMS      # 生存分析 / HMM / 卡尔曼 / 变点 / KDE / MCMC / n-gram / Thompson
+    algos += howard.ALGORITHMS        # 邻近数字动量 / 多窗口频率动量 / 伴侣数字链（霍华德经典）
     algos += optimize.ALGORITHMS      # 遗传 / 共现网络 / 反热号 / 覆盖设计
     algos += ml_heavy.ALGORITHMS      # 逻辑回归 / GBDT / 随机森林 / MLP / 时序分解（需 sklearn）
     algos += dl_numpy.ALGORITHMS      # RNN / 注意力 / CNN / GNN / GAN / VAE（需 numpy）
