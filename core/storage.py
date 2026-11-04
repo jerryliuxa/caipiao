@@ -24,6 +24,14 @@ def _conn():
         " issue_target TEXT NOT NULL, numbers TEXT NOT NULL, created_at TEXT NOT NULL,"
         " settled INTEGER NOT NULL DEFAULT 0, main_hits INTEGER, sub_hits INTEGER)"
     )
+    c.execute(
+        "CREATE TABLE IF NOT EXISTS backtest_runs ("
+        " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " fingerprint TEXT NOT NULL UNIQUE,"
+        " game TEXT NOT NULL, algo TEXT NOT NULL, params TEXT NOT NULL DEFAULT '{}',"
+        " window INTEGER NOT NULL, count INTEGER NOT NULL,"
+        " result TEXT NOT NULL, created_at TEXT NOT NULL)"
+    )
     return c
 
 
@@ -103,6 +111,54 @@ def get_predictions(game_key, limit=60):
     return [{"id": r[0], "algo": r[1], "issue_target": r[2], "numbers": json.loads(r[3]),
              "created_at": r[4], "settled": bool(r[5]), "main_hits": r[6], "sub_hits": r[7]}
             for r in rows]
+
+
+# ---------- 回测存档 ----------
+
+def save_backtest_run(game_key, algo_key, params_json, window, count, result_json, last_issue):
+    """存档一次回测运行（同指纹=同算法+参数+数据期，仅刷新时间不重复入库）"""
+    import hashlib
+
+    fp = hashlib.md5(
+        f"{game_key}|{algo_key}|{params_json}|{window}|{count}|{last_issue}".encode("utf-8")
+    ).hexdigest()
+    with _lock, _conn() as c:
+        c.execute(
+            "INSERT INTO backtest_runs (fingerprint, game, algo, params, window, count, result, created_at)"
+            " VALUES (?,?,?,?,?,?,?, datetime('now','localtime'))"
+            " ON CONFLICT(fingerprint) DO UPDATE SET created_at=datetime('now','localtime')",
+            (fp, game_key, algo_key, params_json, int(window), int(count), result_json),
+        )
+        c.execute(
+            "DELETE FROM backtest_runs WHERE id NOT IN"
+            " (SELECT id FROM backtest_runs ORDER BY id DESC LIMIT 500)"
+        )
+
+
+def list_backtest_runs(game_key, limit=30):
+    """回测存档列表（新→旧，不含逐期明细）"""
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT id, algo, window, count, result, created_at FROM backtest_runs"
+            " WHERE game=? ORDER BY id DESC LIMIT ?",
+            (game_key, int(limit)),
+        ).fetchall()
+    out = []
+    for r in rows:
+        try:
+            summary = json.loads(r[4]).get("summary", {})
+        except Exception:
+            summary = {}
+        out.append({"id": r[0], "algo": r[1], "window": r[2], "count": r[3],
+                    "summary": summary, "created_at": r[5]})
+    return out
+
+
+def get_backtest_run(run_id):
+    """取一次回测存档的完整结果（结构与 /api/backtest 返回一致）"""
+    with _conn() as c:
+        row = c.execute("SELECT result FROM backtest_runs WHERE id=?", (int(run_id),)).fetchone()
+    return json.loads(row[0]) if row else None
 
 
 def prediction_stats(game_key):

@@ -59,6 +59,7 @@ async function init() {
   $("#btn-predict").addEventListener("click", predict);
   $("#btn-backtest").addEventListener("click", backtest);
   $("#btn-recommend").addEventListener("click", recommend);
+  $("#btn-bt-history").addEventListener("click", toggleBtHistory);
   $("#btn-compare").addEventListener("click", toggleComparePicker);
   $("#btn-sim").addEventListener("click", runSimulation);
   $("#btn-track-refresh").addEventListener("click", loadTracking);
@@ -74,6 +75,8 @@ function selectGame(g) {
   $("#backtest-result").innerHTML = "";
   $("#compare-result").innerHTML = "";
   $("#recommend-result").innerHTML = "";
+  const bh = $("#bt-history");
+  bh.innerHTML = ""; bh.classList.remove("open");
   return Promise.all([loadStats(), loadHistory(), loadTracking()]).then(() => restoreResult());
 }
 
@@ -631,6 +634,61 @@ async function recTrackSave(r) {
     loadTracking();
   } catch (e) {
     toast("保存失败: " + e.message);
+  }
+}
+
+/* ---------------- 回测历史存档 ---------------- */
+async function toggleBtHistory() {
+  const el = $("#bt-history");
+  if (el.classList.contains("open")) {
+    el.classList.remove("open");
+    el.innerHTML = "";
+    return;
+  }
+  el.classList.add("open");
+  el.innerHTML = `<div class="empty-tip">加载中…</div>`;
+  try {
+    const r = await api(`/api/backtest_history?game=${state.game}&limit=30`);
+    if (!r.runs.length) {
+      el.innerHTML = `<div class="empty-tip">暂无回测存档——跑一次「回测验证」后自动入库（同算法+参数+数据期只保留一条）</div>`;
+      return;
+    }
+    const rows = r.runs
+      .map((x) => {
+        const name = (state.algos.find((a) => a.key === x.algo) || {}).name || x.algo;
+        const s = x.summary || {};
+        return `<tr>
+          <td class="dim-t">${x.created_at}</td>
+          <td><b>${name}</b></td>
+          <td>近 ${x.count} 期 / 窗口 ${x.window}</td>
+          <td><b class="${(s.avg_main_hits || 0) >= (s.baseline_main_hits || 0) ? "good-t" : "dim-t"}">${s.avg_main_hits ?? "—"}</b> <span class="dim-t">(基线 ${s.baseline_main_hits ?? "—"})</span></td>
+          <td>${s.main_hit_rate_ge != null ? (s.main_hit_rate_ge * 100).toFixed(0) + "%" : "—"}</td>
+          <td><button class="btn primary sm2" data-run="${x.id}">查看</button></td>
+        </tr>`;
+      })
+      .join("");
+    el.innerHTML = `
+      <div class="summary"><div class="head">🕘 回测历史存档（${state.games[state.game].name} · 最近 ${r.runs.length} 次 · 持久化于本地数据库，刷新/重启不丢失）</div>
+      点击「查看」可将该次回测完整还原到上方回测区。</div>
+      <div class="table-wrap"><table class="hist">
+        <thead><tr><th>运行时间</th><th>算法</th><th>范围</th><th>主池均命中</th><th>命中≥阈值占比</th><th>操作</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>`;
+    el.querySelectorAll("button[data-run]").forEach((b) => {
+      b.addEventListener("click", async () => {
+        try {
+          const run = await api(`/api/backtest_run?id=${b.dataset.run}`);
+          renderBacktest(run);
+          saveResult("backtest", run);
+          $("#predict-result").innerHTML = "";
+          $("#recommend-result").innerHTML = "";
+          document.querySelector("#backtest-result").scrollIntoView({ block: "start" });
+        } catch (e) {
+          toast("加载存档失败: " + e.message);
+        }
+      });
+    });
+  } catch (e) {
+    el.innerHTML = `<div class="empty-tip">加载失败: ${e.message}</div>`;
   }
 }
 

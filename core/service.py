@@ -245,9 +245,15 @@ def backtest(game_key, algo_key, window=100, count=30, algo_params=None):
         "baseline_sub_hits": round(baseline_sub, 3),
         "sub_full_rate": round(sum(1 for r in rows if r["sub_hits"] == s.count) / n, 3),
     }
-    return {"game": game_key, "algo": algo_key, "algo_name": algo.name,
-            "window": int(window), "baseline_note": "随机选号的理论平均命中",
-            "summary": summary, "rows": rows}
+    result = {"game": game_key, "algo": algo_key, "algo_name": algo.name,
+              "window": int(window), "baseline_note": "随机选号的理论平均命中",
+              "summary": summary, "rows": rows}
+    try:  # 回测存档入库：同算法+参数+数据期只保留一条，时间刷新
+        storage.save_backtest_run(game_key, algo_key, params_json, int(window), len(rows),
+                                  json.dumps(result, ensure_ascii=False), draws_all[-1]["issue"])
+    except Exception:
+        pass
+    return result
 
 
 # ---------- 回测择优荐号 ----------

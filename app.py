@@ -174,6 +174,17 @@ class Handler(BaseHTTPRequestHandler):
                 window=int(q.get("window", 100)), count=min(int(q.get("count", 30)), 60),
                 n_sets=int(q.get("sets", 5)), nonce=q.get("nonce", "0"), algo_params=params))
 
+        elif route == "/api/backtest_history":
+            self._json({"runs": storage.list_backtest_runs(
+                q.get("game", "ssq"), limit=min(int(q.get("limit", 30)), 100))})
+
+        elif route == "/api/backtest_run":
+            run = storage.get_backtest_run(q.get("id", 0))
+            if not run:
+                self._json({"error": "回测存档不存在"}, 404)
+            else:
+                self._json(run)
+
         else:
             self._json({"error": f"未知接口 {route}"}, 404)
 
