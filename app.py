@@ -172,7 +172,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json(service.recommend_after_backtest(
                 q.get("game", "ssq"), q.get("algo", "ensemble"),
                 window=int(q.get("window", 100)), count=min(int(q.get("count", 30)), 60),
-                nonce=q.get("nonce", "0"), algo_params=params))
+                n_sets=int(q.get("sets", 5)), nonce=q.get("nonce", "0"), algo_params=params))
 
         else:
             self._json({"error": f"未知接口 {route}"}, 404)

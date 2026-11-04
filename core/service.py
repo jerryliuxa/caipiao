@@ -16,8 +16,9 @@ def _make_rng(game_key, algo_key, window, nonce, last_issue):
     return random.Random(seed)
 
 
-def _generate_main_sets(game, scores, combo_filter, n_sets, rng):
-    """主池组合：首注取评分 Top-K，其余按评分加权抽样并逐级放宽形态约束"""
+def _generate_main_sets(game, scores, combo_filter, n_sets, rng, greedy_first=True):
+    """主池组合：默认首注取评分 Top-K（回测/预测用，保证可复现），其余按评分加权抽样并逐级放宽形态约束；
+    greedy_first=False 时全部随机加权抽样（荐号用，每次点击刷新一批）"""
     k = game.main_pool.count
     ranked = sorted(game.main_pool.numbers, key=lambda n: -scores[n - 1])
     top = ranked[: k * 3]
@@ -25,11 +26,12 @@ def _generate_main_sets(game, scores, combo_filter, n_sets, rng):
 
     sets, seen = [], set()
     greedy = tuple(sorted(ranked[:k]))
-    for level in (2, 1):
-        if combo_filter.ok(greedy, level):
-            sets.append(list(greedy))
-            seen.add(greedy)
-            break
+    if greedy_first:
+        for level in (2, 1):
+            if combo_filter.ok(greedy, level):
+                sets.append(list(greedy))
+                seen.add(greedy)
+                break
     attempts = 0
     for level, budget in ((2, 4000), (1, 3000)):
         while len(sets) < n_sets and attempts < budget:
@@ -49,19 +51,24 @@ def _generate_main_sets(game, scores, combo_filter, n_sets, rng):
     return sets[:n_sets]
 
 
-def _generate_sub_sets(game, scores, n_sets, rng):
-    """副池组合：单号轮换 Top-3；双号抽样 Top-6"""
+def _generate_sub_sets(game, scores, n_sets, rng, greedy_first=True):
+    """副池组合：单号轮换 Top-3；双号抽样 Top-6。greedy_first=False 时打乱首选（荐号用）"""
     sub = game.sub_pool
     ranked = sorted(sub.numbers, key=lambda n: -scores[n - 1])
     if sub.count == 1:
         top = ranked[:3]
-        return [[n] for n in (top[i % len(top)] for i in range(n_sets))]
+        if greedy_first:
+            return [[n] for n in (top[i % len(top)] for i in range(n_sets))]
+        order = top[:]
+        rng.shuffle(order)
+        return [[n] for n in (order[i % len(order)] for i in range(n_sets))]
     top = ranked[:6]
     weights = [max(scores[n - 1], 1e-6) ** 3 for n in top]
     pairs, seen = [], set()
     first = tuple(sorted(top[:2]))
-    pairs.append(list(first))
-    seen.add(first)
+    if greedy_first:
+        pairs.append(list(first))
+        seen.add(first)
     attempts = 0
     while len(pairs) < n_sets and attempts < 3000:
         attempts += 1
@@ -208,10 +215,11 @@ def backtest(game_key, algo_key, window=100, count=30, algo_params=None):
 
 # ---------- 回测择优荐号 ----------
 
-def recommend_after_backtest(game_key, algo_key, window=100, count=30, nonce=0, algo_params=None):
-    """回测择优荐号：以滚动回测的逐号命中/盲区统计修正算法评分，融合后按标准约束管线出一注。
+def recommend_after_backtest(game_key, algo_key, window=100, count=30, n_sets=5, nonce=0, algo_params=None):
+    """回测择优荐号：以滚动回测的逐号命中/盲区统计修正算法评分，融合后按标准约束管线出票。
 
     融合规则：当前算法评分 + 0.4×「预测且命中」信任加成 + 0.3×「常开出但漏掉」盲区补强。
+    全部随机加权抽样（不走贪心首注），nonce 变化即整批刷新。
     """
     game = get_game(game_key)
     algo = get_algorithm(algo_key)
@@ -266,36 +274,40 @@ def recommend_after_backtest(game_key, algo_key, window=100, count=30, nonce=0, 
     blind_text = "、".join(f"{x['n']:02d}" for x in blind_list) or "（无明显盲区）"
 
     combo_filter = filters.ComboFilter(draws, game)
-    main_sets = _generate_main_sets(game, final_scores[main.key], combo_filter, 1, rng)
-    sub_sets = _generate_sub_sets(game, final_scores[game.sub_pool.key], 1, rng)
-    numbers = {main.key: sorted(main_sets[0]), game.sub_pool.key: sorted(sub_sets[0])}
+    n_sets = max(1, min(int(n_sets), 20))
+    main_sets = _generate_main_sets(game, final_scores[main.key], combo_filter, n_sets, rng, greedy_first=False)
+    sub_sets = _generate_sub_sets(game, final_scores[game.sub_pool.key], n_sets, rng, greedy_first=False)
 
-    detail, heat_sum, heat_cnt = {}, 0.0, 0
-    for pool in game.pools:
-        pred_cnt, hit_cnt, appear_cnt = stat[pool.key]
-        s_algo = stats.normalize(raw_scores[pool.key])
-        fin = final_scores[pool.key]
-        items = []
-        for n in sorted(numbers[pool.key]):
-            items.append({"n": n, "final": round(fin[n - 1], 3), "algo": round(s_algo[n - 1], 3),
-                          "hits": hit_cnt[n - 1], "pred": pred_cnt[n - 1],
-                          "blind": appear_cnt[n - 1] - hit_cnt[n - 1],
-                          "freq": freq[pool.key][n - 1], "omission": omiss[pool.key][n - 1]})
-            heat_sum += fin[n - 1]
-            heat_cnt += 1
-        detail[pool.key] = items
+    tickets = []
+    for i in range(n_sets):
+        numbers = {main.key: sorted(main_sets[i]), game.sub_pool.key: sorted(sub_sets[i])}
+        detail, heat_sum, heat_cnt = {}, 0.0, 0
+        for pool in game.pools:
+            pred_cnt, hit_cnt, appear_cnt = stat[pool.key]
+            s_algo = stats.normalize(raw_scores[pool.key])
+            fin = final_scores[pool.key]
+            items = []
+            for n in sorted(numbers[pool.key]):
+                items.append({"n": n, "final": round(fin[n - 1], 3), "algo": round(s_algo[n - 1], 3),
+                              "hits": hit_cnt[n - 1], "pred": pred_cnt[n - 1],
+                              "blind": appear_cnt[n - 1] - hit_cnt[n - 1],
+                              "freq": freq[pool.key][n - 1], "omission": omiss[pool.key][n - 1]})
+                heat_sum += fin[n - 1]
+                heat_cnt += 1
+            detail[pool.key] = items
+        tickets.append({"numbers": numbers, "score": round(heat_sum / max(heat_cnt, 1) * 100, 1),
+                        "detail": detail})
 
     s = bt["summary"]
     summary = (f"以 {bt['algo_name']} 滚动回测近 {s['count']} 期为依据（主池均命中 {s['avg_main_hits']}，"
                f"随机基线 {s['baseline_main_hits']}）：当前算法评分 + 回测「预测且命中」信任加成 40% "
-               f"+ 「常开出但漏掉」盲区补强 30%，融合后经历史分布约束出票。主池信任号：{trust_text}；"
-               f"盲区补强号：{blind_text}。")
+               f"+ 「常开出但漏掉」盲区补强 30%，融合后经历史分布约束随机抽样出票（共 {n_sets} 注，"
+               f"每次点击整批刷新）。主池信任号：{trust_text}；盲区补强号：{blind_text}。")
     return {
         "game": game_key, "algo": algo_key, "algo_name": algo.name,
-        "window": len(draws), "backtest_count": s["count"],
+        "window": len(draws), "backtest_count": s["count"], "n_sets": n_sets,
         "summary": summary,
-        "tickets": [{"numbers": numbers, "score": round(heat_sum / max(heat_cnt, 1) * 100, 1),
-                     "detail": detail}],
+        "tickets": tickets,
         "analysis": {"backtest": s, "trust": trust_list, "blind": blind_list},
     }
 

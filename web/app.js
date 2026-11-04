@@ -511,9 +511,10 @@ async function recommend() {
   btn.disabled = true; btn.textContent = "分析中…";
   try {
     const window = $("#sel-window").value;
+    const sets = $("#sel-sets").value;
     const params = encodeURIComponent(JSON.stringify(collectParams()));
     const nonce = Date.now() % 1e9;
-    const r = await api(`/api/recommend?game=${state.game}&algo=${state.algo}&window=${window}&count=30&params=${params}&nonce=${nonce}`);
+    const r = await api(`/api/recommend?game=${state.game}&algo=${state.algo}&window=${window}&count=30&sets=${sets}&params=${params}&nonce=${nonce}`);
     renderRecommend(r);
   } catch (e) {
     toast("荐号失败: " + e.message);
@@ -524,19 +525,28 @@ async function recommend() {
 
 function renderRecommend(r) {
   const game = state.games[r.game];
-  const t = r.tickets[0];
-  const balls = game.pools
-    .map((p) => ballsHTML(t.numbers[p.key], p.color))
-    .join(`<span class="sep">|</span>`);
-  const details = game.pools
-    .map(
-      (p) => t.detail[p.key]
+  const tickets = r.tickets
+    .map((t, i) => {
+      const balls = game.pools
+        .map((p) => ballsHTML(t.numbers[p.key], p.color))
+        .join(`<span class="sep">|</span>`);
+      const details = game.pools
         .map(
-          (d) => `<span class="detail-item"><b class="${p.color === "red" ? "red-t" : "blue-t"}" style="color:${p.color === "red" ? "#ff7a6e" : "#6ea8ff"}">${fmt(d.n)}</b>
-            融合 ${d.final} · 算法 ${d.algo} · 回测命中 ${d.hits}/${d.pred} · 盲区 ${d.blind} · 遗漏 ${d.omission} 期</span>`
+          (p) => t.detail[p.key]
+            .map(
+              (d) => `<span class="detail-item"><b class="${p.color === "red" ? "red-t" : "blue-t"}" style="color:${p.color === "red" ? "#ff7a6e" : "#6ea8ff"}">${fmt(d.n)}</b>
+                融合 ${d.final} · 算法 ${d.algo} · 回测命中 ${d.hits}/${d.pred} · 盲区 ${d.blind} · 遗漏 ${d.omission} 期</span>`
+            )
+            .join("")
         )
-        .join("")
-    )
+        .join("");
+      return `<div class="ticket">
+        <span class="no">第 ${i + 1} 注</span>
+        <span class="balls">${balls}</span>
+        <span class="score">融合热度 <b>${t.score}</b></span>
+        <div class="detail-grid" style="display:block;padding-top:6px">${details}</div>
+      </div>`;
+    })
     .join("");
   const pool = game.pools[0];
   const trustRows = (r.analysis.trust || [])
@@ -548,15 +558,10 @@ function renderRecommend(r) {
 
   $("#recommend-result").innerHTML = `
     <div class="summary"><div class="head">🎯 ${r.algo_name} · 回测择优荐号（基于近 ${r.backtest_count} 期回测分析，窗口 ${r.window} 期）</div>${r.summary}</div>
-    <div class="ticket">
-      <span class="no">推荐 1 注</span>
-      <span class="balls">${balls}</span>
-      <span class="score">融合热度 <b>${t.score}</b></span>
-    </div>
-    <div style="display:flex;flex-wrap:wrap;gap:6px 16px;padding:10px 4px 2px">${details}</div>
+    <div class="tickets">${tickets}</div>
     <div class="pred-actions">
-      <button class="btn sm" id="btn-rec-track" ${state.stats && !state.stats.empty ? "" : "disabled"}>💾 保存并跟踪此注（下期开奖自动核对）</button>
-      <span class="hint-inline">与普通预测一样进入「预测跟踪」战绩体系</span>
+      <button class="btn sm" id="btn-rec-track" ${state.stats && !state.stats.empty ? "" : "disabled"}>💾 保存并跟踪全部 ${r.n_sets} 注（下期开奖自动核对）</button>
+      <span class="hint-inline">每次点击整批重新抽样；与普通预测一样进入「预测跟踪」战绩体系</span>
     </div>
     <div class="rank-table"><div class="rank-wrap">
       <div class="rank-cols"><table><thead><tr><th colspan="3">${pool.name} 回测信任号（预测且命中）</th></tr></thead><tbody>${trustRows}</tbody></table></div>
