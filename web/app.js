@@ -80,43 +80,29 @@ function selectGame(g) {
   return Promise.all([loadStats(), loadHistory(), loadTracking()]).then(() => restoreResult());
 }
 
-/* ---- 结果持久化：选号（预测/荐号互斥）与回测分析分键保存，刷新页面后都恢复 ---- */
+/* ---- 结果持久化：预测/荐号/回测三个区域独立保存、独立恢复、互不清除 ---- */
 function saveResult(type, r) {
-  try {
-    if (type === "backtest") {
-      localStorage.setItem(`lotto_backtest_${state.game}`, JSON.stringify(r));
-    } else {
-      localStorage.setItem(`lotto_selection_${state.game}`, JSON.stringify({ type, r }));
-    }
-  } catch (e) { /* 存储超限静默忽略 */ }
+  try { localStorage.setItem(`lotto_${type}_${state.game}`, JSON.stringify(r)); }
+  catch (e) { /* 存储超限静默忽略 */ }
 }
 
 function restoreResult() {
   const game = state.games[state.game];
-  // 恢复当前选号（预测或荐号，二选一）
-  let sel = null;
-  try { sel = JSON.parse(localStorage.getItem(`lotto_selection_${state.game}`) || "null"); } catch (e) { sel = null; }
-  if (sel && sel.r) {
-    try {
-      if (sel.r.algo) {
-        state.algo = sel.r.algo;
-        document.querySelectorAll(".algo-card").forEach((c) => c.classList.toggle("active", c.dataset.algo === sel.r.algo));
-        renderAlgoParams();
-      }
-      if (sel.type === "predict") {
-        state.lastPredict = sel.r;
-        renderPredict(game, sel.r);
-      } else if (sel.type === "recommend") {
-        renderRecommend(sel.r);
-      }
-    } catch (e) { /* 恢复失败静默忽略 */ }
+  const load = (key) => {
+    try { return JSON.parse(localStorage.getItem(`lotto_${key}_${state.game}`) || "null"); }
+    catch (e) { return null; }
+  };
+  const p = load("predict"), rm = load("recommend"), bt = load("backtest");
+  // 恢复算法选中态（优先预测，其次荐号）
+  const primaryAlgo = (p && p.algo) || (rm && rm.algo);
+  if (primaryAlgo) {
+    state.algo = primaryAlgo;
+    document.querySelectorAll(".algo-card").forEach((c) => c.classList.toggle("active", c.dataset.algo === primaryAlgo));
+    renderAlgoParams();
   }
-  // 恢复回测分析（与选号独立共存）
-  let bt = null;
-  try { bt = JSON.parse(localStorage.getItem(`lotto_backtest_${state.game}`) || "null"); } catch (e) { bt = null; }
-  if (bt) {
-    try { renderBacktest(bt); } catch (e) { /* 静默 */ }
-  }
+  if (p) { try { state.lastPredict = p; renderPredict(game, p); } catch (e) {} }
+  if (rm) { try { renderRecommend(rm); } catch (e) {} }
+  if (bt) { try { renderBacktest(bt); } catch (e) {} }
 }
 
 /* ---------------- 数据栏 / 统计 ---------------- */
@@ -414,8 +400,7 @@ async function predict() {
     const nonce = Date.now() % 1e9;
     const r = await api(`/api/predict?game=${state.game}&algo=${state.algo}&window=${window}&sets=${sets}&nonce=${nonce}&params=${params}`);
     renderPredict(game, r);
-    saveResult("predict", r);
-    $("#recommend-result").innerHTML = "";  // 选号互斥：预测与荐号二选一（回测区为分析面板，保留）
+    saveResult("predict", r);  // 三区独立共存：互不清除
   } catch (e) {
     toast("预测失败: " + e.message);
   } finally {
@@ -563,8 +548,7 @@ async function recommend() {
     const nonce = Date.now() % 1e9;
     const r = await api(`/api/recommend?game=${state.game}&algo=${state.algo}&window=${window}&count=30&sets=${sets}&params=${params}&nonce=${nonce}`);
     renderRecommend(r);
-    saveResult("recommend", r);
-    $("#predict-result").innerHTML = "";  // 选号互斥：荐号与预测二选一（回测区为分析面板，保留）
+    saveResult("recommend", r);  // 三区独立共存：不清预测/回测
     toast(`已重新分析并生成 ${r.n_sets} 注新荐号（可无限次点击刷新）`);
   } catch (e) {
     toast("荐号失败: " + e.message);
