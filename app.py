@@ -4,6 +4,7 @@ import os
 import socket
 import sys
 import threading
+import time
 import traceback
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -15,6 +16,8 @@ from core.games import GAMES
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(ROOT, "web")
+
+AUTO_UPDATE_INTERVAL = 300  # 开奖数据自动探针周期（秒）
 
 MIME = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
         ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png",
@@ -134,6 +137,10 @@ class Handler(BaseHTTPRequestHandler):
                              "settled": settled}
             self._json({"ok": True, "result": result})
 
+        elif route == "/api/version":
+            self._json({"version": _data_version(),
+                        "now": time.strftime("%Y-%m-%d %H:%M:%S")})
+
         elif route == "/api/tracking":
             self._json(service.tracking_summary(q.get("game", "ssq"),
                                                 limit=min(int(q.get("limit", 60)), 300)))
@@ -238,6 +245,28 @@ class Handler(BaseHTTPRequestHandler):
         }
 
 
+def _data_version():
+    """全部游戏最新一期构成的版本指纹（数据变化即变）"""
+    return "|".join(f"{gk}:{storage.latest_issue(gk)}" for gk in GAMES)
+
+
+def _auto_update_loop():
+    """后台探针：每轮检查各游戏是否有新一期，有则自动入库并结算预测"""
+    while True:
+        time.sleep(AUTO_UPDATE_INTERVAL)
+        for gk in GAMES:
+            try:
+                probe = datasource.fetch_history(gk, 10)
+                latest_new = probe[-1]["issue"] if probe else ""
+                if latest_new and storage.latest_issue(gk) != latest_new:
+                    fetched = datasource.fetch_history(gk, 200)
+                    added = storage.upsert_draws(gk, fetched)
+                    settled = service.settle_pending(gk)
+                    print(f"[auto] {gk} 自动更新：新增 {added} 期（最新 {latest_new}），核对预测 {settled} 注")
+            except Exception as exc:
+                print(f"[auto] {gk} 探针失败: {exc}")
+
+
 def find_port(start=8787):
     for port in range(start, start + 20):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -255,6 +284,7 @@ def main():
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     port = find_port()
     threading.Thread(target=ensure_data, daemon=True).start()
+    threading.Thread(target=_auto_update_loop, daemon=True).start()
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     url = f"http://127.0.0.1:{port}"
     print(f"彩票分析预测平台已启动: {url}  (Ctrl+C 退出)")

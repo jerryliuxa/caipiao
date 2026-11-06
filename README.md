@@ -15,7 +15,8 @@
   - 欧洲大奖（主号 50 选 5 + Euro 号 12 选 2，€2/注，每周二五开奖）
   - 欧洲梦想（主号 40 选 6 + 梦想号 5 选 1，€2.50/注，每周一四开奖；头奖为年金：每月 €20,000 连领 30 年）
   - 维京乐透（主号 48 选 6 + 维京号 8 选 1，每周三开奖，北欧波罗的海八国联营）
-- **数据管理**：一键拉取最新开奖（首次启动自动抓取近 300 期），本地 SQLite 存储、增量去重；美国数据网络不可用时自动回退内置快照
+- **数据管理**：一键拉取最新开奖（首次启动自动抓取近 300 期），本地 SQLite 存储、增量去重；美国数据网络不可用时自动回退内置快照；**后台每 5 分钟自动探针各游戏**，有新一期自动入库并结算预测
+- **自动同步**：前端每 60 秒轮询数据版本指纹（`/api/version`），有新数据自动整页刷新，统计/历史/跟踪/已保存结果全部同步；预测/荐号/回测结果按游戏整合为统一状态对象持久化，刷新不丢
 - **统计分析**：号码热度图（频率 + 遗漏 tooltip）、出现频率 / 当前遗漏柱状图、和值走势（含 P10~P90 区间带）、奇偶分布、**号码共现热力图**
 - **44 种预测算法**：按六大分类分组展示，部分算法带可调参数
 - **号码生成**：按评分加权抽样，自动套用历史分布约束（和值、奇偶、大小、质合、三分区、012路、AC 值、跨度、尾数、连号、重号），抽样失败时逐级放宽
@@ -128,6 +129,7 @@ pip install numpy scikit-learn
 | `/api/recommend?game=ssq&algo=ensemble&window=100&count=30&params={}` | 回测择优荐号（回测分析 + 融合评分出票） |
 | `POST /api/track` | 保存预测用于跟踪（body: game/algo/params/issue_target/tickets） |
 | `/api/tracking?game=ssq&limit=60` | 跟踪记录 + 算法战绩（调用时自动结算已开奖预测） |
+| `/api/version` | 数据版本指纹（各游戏最新期号），供前端自动同步轮询 |
 | `/api/compare?game=ssq&algos=a,b,c&window=100&backtest=8` | 多算法并排对比 |
 
 `game`：`ssq` / `dlt` / `pb`（美国强力球）/ `mm`（超级百万）/ `em`（欧洲百万）/ `ej`（欧洲大奖）/ `ed`（欧洲梦想）/ `vl`（维京乐透）；`algo`：见算法清单的 key（`ensemble` / `stacking` / `hot` / `cold` / `omission` / `markov` / `period` / `monte` / `survival` / `hmm` / `kalman` / `changepoint` / `kde` / `mcmc` / `ngram` / `thompson` / `adjacency` / `momentum` / `pairchain` / `genetic` / `cooccurrence` / `antiheat` / `cover` / `logistic` / `gbdt` / `rf` / `mlp` / `timeseries` / `rnn` / `attention` / `cnn` / `gnn` / `gan` / `vae` / `lstm` / `transformer` / `rbm` / `esn` / `skipgram` / `svm` / `knncase` / `kmeans` / `bnn` / `rssm`）。

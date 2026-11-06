@@ -65,6 +65,16 @@ async function init() {
   $("#btn-track-refresh").addEventListener("click", loadTracking);
   renderAlgoCards();
   await selectGame("ssq");
+  // 自动同步：启动时记录版本基线，之后每 60 秒轮询；有自动刷新标记则提示
+  try {
+    const v = await api("/api/version");
+    if (!sessionStorage.getItem("lotto_version")) sessionStorage.setItem("lotto_version", v.version);
+    if (sessionStorage.getItem("lotto_autoreload") === "1") {
+      sessionStorage.removeItem("lotto_autoreload");
+      toast("开奖数据已自动更新，页面已同步刷新");
+    }
+  } catch (e) {}
+  setInterval(pollVersion, 60000);
 }
 
 function selectGame(g) {
@@ -80,29 +90,67 @@ function selectGame(g) {
   return Promise.all([loadStats(), loadHistory(), loadTracking()]).then(() => restoreResult());
 }
 
-/* ---- 结果持久化：预测/荐号/回测三个区域独立保存、独立恢复、互不清除 ---- */
+/* ---- 结果持久化（统一状态）：预测/荐号/回测按游戏整合为一个状态对象，刷新后整体恢复 ---- */
+function _loadState() {
+  try { return JSON.parse(localStorage.getItem(`lotto_state_${state.game}`) || "null") || {}; }
+  catch (e) { return {}; }
+}
+
+function _saveState(st) {
+  try {
+    st.savedAt = new Date().toISOString();
+    localStorage.setItem(`lotto_state_${state.game}`, JSON.stringify(st));
+  } catch (e) { /* 存储超限静默忽略 */ }
+}
+
 function saveResult(type, r) {
-  try { localStorage.setItem(`lotto_${type}_${state.game}`, JSON.stringify(r)); }
-  catch (e) { /* 存储超限静默忽略 */ }
+  const st = _loadState();
+  st[type] = r;
+  _saveState(st);
 }
 
 function restoreResult() {
+  let st = _loadState();
+  // 迁移旧的三键存储 → 统一状态对象（一次性）
+  if (!Object.keys(st).length) {
+    for (const k of ["predict", "recommend", "backtest"]) {
+      try {
+        const v = JSON.parse(localStorage.getItem(`lotto_${k}_${state.game}`) || "null");
+        if (v) st[k] = v;
+      } catch (e) {}
+    }
+    if (Object.keys(st).length) _saveState(st);
+    for (const k of ["predict", "recommend", "backtest"]) {
+      localStorage.removeItem(`lotto_${k}_${state.game}`);
+    }
+  }
   const game = state.games[state.game];
-  const load = (key) => {
-    try { return JSON.parse(localStorage.getItem(`lotto_${key}_${state.game}`) || "null"); }
-    catch (e) { return null; }
-  };
-  const p = load("predict"), rm = load("recommend"), bt = load("backtest");
-  // 恢复算法选中态（优先预测，其次荐号）
-  const primaryAlgo = (p && p.algo) || (rm && rm.algo);
+  const primaryAlgo = (st.predict && st.predict.algo) || (st.recommend && st.recommend.algo);
   if (primaryAlgo) {
     state.algo = primaryAlgo;
     document.querySelectorAll(".algo-card").forEach((c) => c.classList.toggle("active", c.dataset.algo === primaryAlgo));
     renderAlgoParams();
   }
-  if (p) { try { state.lastPredict = p; renderPredict(game, p); } catch (e) {} }
-  if (rm) { try { renderRecommend(rm); } catch (e) {} }
-  if (bt) { try { renderBacktest(bt); } catch (e) {} }
+  if (st.predict) { try { state.lastPredict = st.predict; renderPredict(game, st.predict); } catch (e) {} }
+  if (st.recommend) { try { renderRecommend(st.recommend); } catch (e) {} }
+  if (st.backtest) { try { renderBacktest(st.backtest); } catch (e) {} }
+}
+
+/* ---- 自动同步：后台每 5 分钟探针新开奖，前端轮询版本号，变化即整页刷新 ---- */
+async function pollVersion() {
+  try {
+    // 忙碌时顺延（避免打断进行中的回测/荐号/更新）
+    if (document.querySelector("#btn-predict:disabled, #btn-backtest:disabled, #btn-recommend:disabled, #btn-update:disabled, #btn-compare:disabled")) return;
+    const v = await api("/api/version");
+    const prev = sessionStorage.getItem("lotto_version");
+    if (prev && prev !== v.version) {
+      sessionStorage.setItem("lotto_version", v.version);
+      sessionStorage.setItem("lotto_autoreload", "1");
+      location.reload();  // 整页刷新：统计/历史/跟踪/恢复的结果全部同步到新数据
+      return;
+    }
+    if (prev !== v.version) sessionStorage.setItem("lotto_version", v.version);
+  } catch (e) { /* 服务暂不可达，下轮再试 */ }
 }
 
 /* ---------------- 数据栏 / 统计 ---------------- */

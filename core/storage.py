@@ -67,6 +67,17 @@ def count(game_key):
         return c.execute("SELECT COUNT(*) FROM draws WHERE game=?", (game_key,)).fetchone()[0]
 
 
+def latest_issue(game_key):
+    """该游戏最新一期的期号（无数据返回空串）"""
+    with _conn() as c:
+        row = c.execute(
+            "SELECT issue FROM draws WHERE game=?"
+            " ORDER BY draw_date DESC, CAST(issue AS INTEGER) DESC LIMIT 1",
+            (game_key,),
+        ).fetchone()
+    return row[0] if row else ""
+
+
 # ---------- 预测跟踪 ----------
 
 def save_prediction(game_key, algo_key, params_json, issue_target, numbers_json):
